@@ -12,14 +12,14 @@ type Process interface {
 }
 
 type Supervisor struct {
-	rs []Process
+	processes []Process
 }
 
 type SupervisorOption func(*Supervisor)
 
 func New(opts ...SupervisorOption) *Supervisor {
 	s := &Supervisor{
-		rs: make([]Process, 0),
+		processes: make([]Process, 0),
 	}
 
 	for _, o := range opts {
@@ -36,32 +36,37 @@ func WithProcess(p Process) SupervisorOption {
 }
 
 func (s *Supervisor) Start(ctx context.Context) error {
+	cancelCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	var eg errgroup.Group
 
-	for _, rs := range s.rs {
+	for _, p := range s.processes {
+		p := p
 		eg.Go(func() error {
-			return rs.Start()
+			return p.Start()
 		})
 	}
 
-	go func(ctx context.Context) {
-		<-ctx.Done()
-		s.Stop()
-	}(ctx)
+	eg.Go(func() error {
+		<-cancelCtx.Done()
+		return s.stop()
+	})
 
 	return eg.Wait()
 }
 
-func (s *Supervisor) Stop() error {
-	for _, rs := range s.rs {
-		if err := rs.Stop(); err != nil {
-			return err
-		}
+func (s *Supervisor) stop() error {
+	var eg errgroup.Group
+	for _, p := range s.processes {
+		lp := p
+		eg.Go(func() error {
+			return lp.Stop()
+		})
 	}
-
-	return nil
+	return eg.Wait()
 }
 
 func (s *Supervisor) addProcess(rs Process) {
-	s.rs = append(s.rs, rs)
+	s.processes = append(s.processes, rs)
 }

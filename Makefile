@@ -21,8 +21,6 @@ install-tools:
 ifndef GOLANGCI_LINT
 	@echo ">> Installing golangci-lint..."
 	@go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-else
-	@echo ">> golangci-lint is already installed: $(GOLANGCI_LINT)"
 endif
 
 all: build
