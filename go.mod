@@ -9,6 +9,7 @@ require (
 	github.com/jackc/pgx/v5 v5.7.4
 	github.com/joho/godotenv v1.5.1
 	github.com/miekg/dns v1.1.65
+	github.com/pkg/errors v0.9.1
 	golang.org/x/sync v0.13.0
 )
 

@@ -17,14 +17,14 @@ const (
 )
 
 type DefaultControllerService struct {
-	repo repository.BeaconDBRepository
+	registry repository.TransactorRegistry
 }
 
 var _ ControllerService = (*DefaultControllerService)(nil)
 
-func NewControllerService(repo repository.BeaconDBRepository) *DefaultControllerService {
+func NewControllerService(r repository.TransactorRegistry) *DefaultControllerService {
 	return &DefaultControllerService{
-		repo: repo,
+		registry: r,
 	}
 }
 
@@ -36,11 +36,11 @@ func (d *DefaultControllerService) AddNameServer(ctx context.Context, name strin
 		IPAddress: ip,
 	}
 
-	return d.repo.AddNameServer(ctx, ns)
+	return d.registry.GetNameServerRepository().AddNameServer(ctx, ns)
 }
 
 func (d *DefaultControllerService) ListNameServers(ctx context.Context) ([]domain.NameServer, error) {
-	return d.repo.ListNameServers(ctx)
+	return d.registry.GetNameServerRepository().ListNameServers(ctx)
 }
 
 func (d *DefaultControllerService) CreateZone(ctx context.Context, name string) (*domain.CreateZoneResult, error) {
@@ -52,7 +52,7 @@ func (d *DefaultControllerService) CreateZone(ctx context.Context, name string) 
 		Name: zoneName,
 	}
 
-	nameServers, err := d.repo.GetRandomNameServers(ctx, delegationSetSize)
+	nameServers, err := d.registry.GetNameServerRepository().GetRandomNameServers(ctx, delegationSetSize)
 	if err != nil {
 		return nil, err
 	} else if len(nameServers) < delegationSetSize {
@@ -130,18 +130,35 @@ func (d *DefaultControllerService) CreateZone(ctx context.Context, name string) 
 	}
 
 	params := repository.CreateZoneParams{
-		Zone:           &zone,
-		DelegationSet:  &ds,
-		SOA:            &soa,
-		NS:             &nsRec,
-		Change:         &change,
-		OutboxMessages: msgs,
-		Syncs:          syncs,
+		Zone:          zone,
+		DelegationSet: ds,
+		SOA:           soa,
+		NS:            nsRec,
+		Change:        change,
+		Syncs:         syncs,
 	}
 
-	changeInfo, err := d.repo.CreateZone(ctx, params)
+	createZoneFunc := func(ctx context.Context, r repository.Registry) (any, error) {
+		out, err := r.GetZoneRepository().CreateZone(ctx, params)
+		if err != nil {
+			return nil, err
+		}
+
+		if err = r.GetOutboxRepository().InsertMessages(ctx, msgs); err != nil {
+			return nil, err
+		}
+
+		return out, nil
+	}
+
+	rawResult, err := d.registry.WithinTransaction(ctx, createZoneFunc)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create zone: %w", err)
+	}
+
+	changeInfo, ok := rawResult.(*domain.ChangeInfo)
+	if !ok {
+		return nil, fmt.Errorf("unexpected result type: %T", rawResult)
 	}
 
 	return &domain.CreateZoneResult{

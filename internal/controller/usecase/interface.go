@@ -18,3 +18,7 @@ type ControllerService interface {
 	AddNameServer(ctx context.Context, name string, routeKey string, ip string) (*domain.NameServer, error)
 	ListNameServers(ctx context.Context) ([]domain.NameServer, error)
 }
+
+type OutboxService interface {
+	SendOutboxMessage(ctx context.Context, msg domain.OutboxMessage) error
+}

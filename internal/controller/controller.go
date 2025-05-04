@@ -35,12 +35,9 @@ func NewServer(ctx context.Context, s ControllerSettings) (*supervisor.Superviso
 		return nil, fmt.Errorf("error creating connection pool: %w", err)
 	}
 
-	beaconDB, err := repository.NewBeaconDB(db)
-	if err != nil {
-		return nil, err
-	}
+	repoRegistry := repository.NewPostgresRepositoryRegistry(db)
 
-	controllerService := usecase.NewControllerService(beaconDB)
+	controllerService := usecase.NewControllerService(repoRegistry)
 
 	httpServer := &http.Server{
 		Addr:    fmt.Sprintf(":%d", s.Port),
