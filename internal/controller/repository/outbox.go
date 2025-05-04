@@ -62,7 +62,7 @@ func (p *PostgresOutboxRepository) InsertMessages(ctx context.Context, msgs []do
 	results := p.db.SendBatch(ctx, batch)
 	defer results.Close()
 
-	for _, _ = range msgs {
+	for range msgs {
 		if _, err := results.Exec(); err != nil {
 			return fmt.Errorf("failed to insert outbox message: %w", err)
 		}
