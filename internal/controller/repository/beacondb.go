@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"encoding/json"
+	"log"
 
 	"github.com/davidseybold/beacondns/internal/controller/domain"
 	"github.com/davidseybold/beacondns/internal/libs/db/postgres"
@@ -27,7 +28,7 @@ func (b *BeaconDB) AddNameServer(ctx context.Context, ns *domain.NameServer) (*d
 	if err != nil {
 		return nil, err
 	}
-	defer txn.Rollback(ctx)
+	defer rollback(ctx, txn)
 
 	row := txn.QueryRow(ctx, insertNameserverQuery, ns.ID, ns.Name, ns.RouteKey, ns.IPAddress)
 
@@ -58,7 +59,7 @@ func (b *BeaconDB) CreateZone(ctx context.Context, params CreateZoneParams) (*do
 	if err != nil {
 		return nil, err
 	}
-	defer txn.Rollback(ctx)
+	defer rollback(ctx, txn)
 
 	if err := insertDelegationSet(ctx, txn, params.DelegationSet); err != nil {
 		return nil, err
@@ -218,4 +219,11 @@ func scanNameServer(row pgx.Row) (*domain.NameServer, error) {
 	}
 
 	return &ns, nil
+}
+
+func rollback(ctx context.Context, txn postgres.Tx) {
+	if err := txn.Rollback(ctx); err != nil && err != pgx.ErrTxClosed {
+		// TODO: handle logging more gracefully
+		log.Printf("failed to rollback transaction: %v", err)
+	}
 }
