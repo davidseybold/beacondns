@@ -1,0 +1,39 @@
+#!/bin/bash
+
+# Usage message
+usage() {
+  echo "Usage: $0 --user-name <username> [additional migrate args]"
+  exit 1
+}
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --user-name)
+      user_name="$2"
+      shift 2
+      ;;
+    --help)
+      usage
+      ;;
+    *)
+      migrate_args+=("$1")
+      shift
+      ;;
+  esac
+done
+
+# Validate required parameters
+if [[ -z "$user_name" ]]; then
+  echo "Missing required argument: --user-name"
+  usage
+fi
+
+# Prompt for password securely
+read -s -p "Password for $user_name: " password
+echo
+
+# Run migration
+migrate -path=migrations/controller \
+  -database "postgresql://${user_name}:${password}@localhost:5432/beacon_db?sslmode=disable" \
+  "${migrate_args[@]}"

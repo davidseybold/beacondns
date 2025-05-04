@@ -1,0 +1,43 @@
+#!/bin/bash
+
+# Usage message
+usage() {
+  echo "Usage: $0 --user-name <username> --db-name <database>"
+  exit 1
+}
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --user-name)
+      user_name="$2"
+      shift 2
+      ;;
+    --db-name)
+      db_name="$2"
+      shift 2
+      ;;
+    *)
+      echo "Unknown option: $1"
+      usage
+      ;;
+  esac
+done
+
+# Validate required parameters
+if [[ -z "$user_name" || -z "$db_name" ]]; then
+  echo "Missing required arguments."
+  usage
+fi
+
+# Run SQL commands
+psql -U postgres -d "$db_name" << EOF
+
+REVOKE ALL PRIVILEGES ON DATABASE $db_name FROM $user_name;
+REVOKE USAGE ON SCHEMA public FROM $user_name;
+
+DROP OWNED BY $user_name;
+
+DROP USER $user_name;
+
+EOF

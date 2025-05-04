@@ -1,0 +1,2 @@
+#!/bin/bash
+psql -U postgres -c "\l" 2>/dev/null
