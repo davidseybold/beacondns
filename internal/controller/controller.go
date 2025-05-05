@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/davidseybold/beacondns/internal/controller/api"
+	"github.com/davidseybold/beacondns/internal/controller/outbox"
 	"github.com/davidseybold/beacondns/internal/controller/repository"
 	"github.com/davidseybold/beacondns/internal/controller/usecase"
 	"github.com/davidseybold/beacondns/internal/libs/db/postgres"
@@ -14,12 +15,14 @@ import (
 )
 
 type ControllerSettings struct {
-	Port       int
-	DBHost     string
-	DBUser     string
-	DBPassword string
-	DBPort     int
-	DBName     string
+	Port                   int
+	DBHost                 string
+	DBUser                 string
+	DBPassword             string
+	DBPort                 int
+	DBName                 string
+	OutboxBatchSize        int
+	OutboxProcessorEnabled bool
 }
 
 func NewServer(ctx context.Context, s ControllerSettings) (*supervisor.Supervisor, error) {
@@ -38,13 +41,24 @@ func NewServer(ctx context.Context, s ControllerSettings) (*supervisor.Superviso
 	repoRegistry := repository.NewPostgresRepositoryRegistry(db)
 
 	controllerService := usecase.NewControllerService(repoRegistry)
+	outboxService := usecase.NewOutboxService()
 
 	httpServer := &http.Server{
 		Addr:    fmt.Sprintf(":%d", s.Port),
 		Handler: api.NewHTTPHandler(controllerService),
 	}
 
-	return supervisor.New(
+	supervisorOpts := []supervisor.SupervisorOption{
 		supervisor.WithProcess(server.NewHTTPServer(httpServer)),
-	), nil
+	}
+
+	if s.OutboxProcessorEnabled {
+		if s.OutboxBatchSize <= 0 {
+			return nil, fmt.Errorf("outbox batch size must be greater than 0")
+		}
+		outboxProcess := supervisor.WithProcess(outbox.NewProcessor(repoRegistry, outboxService, s.OutboxBatchSize))
+		supervisorOpts = append(supervisorOpts, outboxProcess)
+	}
+
+	return supervisor.New(supervisorOpts...), nil
 }

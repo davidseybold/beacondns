@@ -15,12 +15,14 @@ import (
 )
 
 type serviceConfig struct {
-	Port   int    `env:"BEACON_PORT" envDefault:"8080"`
-	DBHost string `env:"BEACON_DB_HOST"`
-	DBName string `env:"BEACON_DB_NAME" envDefault:"beacon_db"`
-	DBUser string `env:"BEACON_DB_USER" envDefault:"beacon_controller"`
-	DBPass string `env:"BEACON_DB_PASSWORD"`
-	DBPort int    `env:"BEACON_DB_PORT" envDefault:"5432"`
+	Port                   int    `env:"BEACON_CONTROLLER_PORT" envDefault:"8080"`
+	DBHost                 string `env:"BEACON_DB_HOST"`
+	DBName                 string `env:"BEACON_DB_NAME" envDefault:"beacon_db"`
+	DBUser                 string `env:"BEACON_DB_USER" envDefault:"beacon_controller"`
+	DBPass                 string `env:"BEACON_DB_PASSWORD"`
+	DBPort                 int    `env:"BEACON_DB_PORT" envDefault:"5432"`
+	OutboxProcessorEnabled bool   `env:"BEACON_OUTBOX_PROCESSOR_ENABLED" envDefault:"true"`
+	OutboxBatchSize        int    `env:"BEACON_OUTBOX_BATCH_SIZE" envDefault:"10"`
 }
 
 func main() {
@@ -50,12 +52,13 @@ func run(ctx context.Context, w io.Writer) error {
 	}
 
 	controller, err := controller.NewServer(ctx, controller.ControllerSettings{
-		Port:       cfg.Port,
-		DBHost:     cfg.DBHost,
-		DBName:     cfg.DBName,
-		DBUser:     cfg.DBUser,
-		DBPassword: cfg.DBPass,
-		DBPort:     cfg.DBPort,
+		Port:            cfg.Port,
+		DBHost:          cfg.DBHost,
+		DBName:          cfg.DBName,
+		DBUser:          cfg.DBUser,
+		DBPassword:      cfg.DBPass,
+		DBPort:          cfg.DBPort,
+		OutboxBatchSize: cfg.OutboxBatchSize,
 	})
 
 	if err != nil {

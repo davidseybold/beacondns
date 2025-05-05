@@ -16,11 +16,13 @@ const (
 	INSERT INTO outbox (id, route_key, payload)
 	VALUES ($1, $2, $3);
 	`
+	deleteOutboxMessagesQuery  = "DELETE FROM outbox WHERE id = ANY($1)"
+	selectPendingMessagesQuery = "SELECT id, payload, route_key FROM outbox ORDER BY created_at DESC LIMIT $1"
 )
 
 type OutboxRepository interface {
 	GetPendingMessages(ctx context.Context, limit int) ([]domain.OutboxMessage, error)
-	DeleteMessage(ctx context.Context, id uuid.UUID) error
+	DeleteMessages(ctx context.Context, id []uuid.UUID) error
 	InsertMessages(ctx context.Context, msgs []domain.OutboxMessage) error
 }
 
@@ -29,13 +31,13 @@ type PostgresOutboxRepository struct {
 }
 
 func (p *PostgresOutboxRepository) GetPendingMessages(ctx context.Context, limit int) ([]domain.OutboxMessage, error) {
-	rows, err := p.db.Query(ctx, "SELECT id, payload, route_key FROM outbox WHERE status = 'pending' ORDER BY created_at DESC LIMIT $1", limit)
+	rows, err := p.db.Query(ctx, selectPendingMessagesQuery, limit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var messages []domain.OutboxMessage
+	messages := make([]domain.OutboxMessage, 0)
 	for rows.Next() {
 		var msg domain.OutboxMessage
 		if err := rows.Scan(&msg.ID, &msg.Payload, &msg.RouteKey); err != nil {
@@ -47,8 +49,8 @@ func (p *PostgresOutboxRepository) GetPendingMessages(ctx context.Context, limit
 	return messages, nil
 }
 
-func (p *PostgresOutboxRepository) DeleteMessage(ctx context.Context, id uuid.UUID) error {
-	_, err := p.db.Exec(ctx, "DELETE FROM outbox WHERE id = $1", id)
+func (p *PostgresOutboxRepository) DeleteMessages(ctx context.Context, ids []uuid.UUID) error {
+	_, err := p.db.Exec(ctx, deleteOutboxMessagesQuery, ids)
 	return err
 }
 

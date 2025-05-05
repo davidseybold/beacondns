@@ -63,7 +63,7 @@ func (p *PostgresNameServerRepository) GetRandomNameServers(ctx context.Context,
 }
 
 func scanNameServers(rows pgx.Rows) ([]domain.NameServer, error) {
-	var nameServers []domain.NameServer
+	nameServers := make([]domain.NameServer, 0)
 	for rows.Next() {
 		ns, err := scanNameServer(rows)
 		if err != nil {
