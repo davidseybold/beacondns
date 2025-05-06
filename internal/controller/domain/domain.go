@@ -6,37 +6,42 @@ import (
 	"github.com/google/uuid"
 )
 
+type ZoneChangeAction string
+type RRSetChangeAction string
+type ChangeSyncStatus string
+type RRType string
+
 const (
-	ZoneChangeActionCreateZone = "CREATE_ZONE"
-	ZoneChangeActionDeleteZone = "DELETE_ZONE"
-	ZoneChangeActionUpdateZone = "UPDATE_ZONE"
+	ZoneChangeActionCreateZone ZoneChangeAction = "CREATE_ZONE"
+	ZoneChangeActionDeleteZone ZoneChangeAction = "DELETE_ZONE"
+	ZoneChangeActionUpdateZone ZoneChangeAction = "UPDATE_ZONE"
 
-	RRSetChangeActionCreate = "CREATE"
-	RRSetChangeActionUpsert = "UPSERT"
-	RRSetChangeActionDelete = "DELETE"
+	RRSetChangeActionCreate RRSetChangeAction = "CREATE"
+	RRSetChangeActionUpsert RRSetChangeAction = "UPSERT"
+	RRSetChangeActionDelete RRSetChangeAction = "DELETE"
 
-	ChangeSyncStatusPending = "PENDING"
-	ChangeSyncStatusInSync  = "INSYNC"
+	ChangeSyncStatusPending ChangeSyncStatus = "PENDING"
+	ChangeSyncStatusInSync  ChangeSyncStatus = "INSYNC"
 )
 
 const (
-	RRTypeSOA    = "SOA"
-	RRTypeNS     = "NS"
-	RRTypeA      = "A"
-	RRTypeAAAA   = "AAAA"
-	RRTypeCNAME  = "CNAME"
-	RRTypeMX     = "MX"
-	RRTypeTXT    = "TXT"
-	RRTypeSRV    = "SRV"
-	RRTypePTR    = "PTR"
-	RRTypeCAA    = "CAA"
-	RRTypeNAPTR  = "NAPTR"
-	RRTypeDS     = "DS"
-	RRTypeDNSKEY = "DNSKEY"
-	RRTypeRRSIG  = "RRSIG"
-	RRTypeNSSEC  = "NSEC"
-	RRTypeTLSA   = "TLSA"
-	RRTypeSPF    = "SPF"
+	RRTypeSOA    RRType = "SOA"
+	RRTypeNS     RRType = "NS"
+	RRTypeA      RRType = "A"
+	RRTypeAAAA   RRType = "AAAA"
+	RRTypeCNAME  RRType = "CNAME"
+	RRTypeMX     RRType = "MX"
+	RRTypeTXT    RRType = "TXT"
+	RRTypeSRV    RRType = "SRV"
+	RRTypePTR    RRType = "PTR"
+	RRTypeCAA    RRType = "CAA"
+	RRTypeNAPTR  RRType = "NAPTR"
+	RRTypeDS     RRType = "DS"
+	RRTypeDNSKEY RRType = "DNSKEY"
+	RRTypeRRSIG  RRType = "RRSIG"
+	RRTypeNSEC   RRType = "NSEC"
+	RRTypeTLSA   RRType = "TLSA"
+	RRTypeSPF    RRType = "SPF"
 )
 
 type ZoneInfo struct {
@@ -57,7 +62,7 @@ type Zone struct {
 type ResourceRecordSet struct {
 	ID              uuid.UUID
 	Name            string
-	Type            string
+	Type            RRType
 	TTL             uint
 	ResourceRecords []ResourceRecord
 }
@@ -71,27 +76,27 @@ type ChangeBatch struct {
 }
 
 type ResourceRecordSetChange struct {
-	Action            string
+	Action            RRSetChangeAction
 	ResourceRecordSet ResourceRecordSet
 }
 
 type ZoneChange struct {
 	ID      uuid.UUID
 	ZoneID  uuid.UUID
-	Action  string
+	Action  ZoneChangeAction
 	Changes []ResourceRecordSetChange
 }
 
 type ZoneChangeSync struct {
 	ZoneChangeID uuid.UUID
 	NameServerID uuid.UUID
-	Status       string
+	Status       ChangeSyncStatus
 	SyncedAt     *time.Time
 }
 
 type ChangeInfo struct {
 	ID          uuid.UUID
-	Status      string
+	Status      ChangeSyncStatus
 	SubmittedAt time.Time
 }
 

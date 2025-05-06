@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+package beacondns.v1;
+
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/davidseybold/beacondns/internal/libs/gen/proto/beacondns/v1;beacondnspb";
+
+// Constants for zone and resource record set actions
+enum ZoneChangeAction {
+  ZONE_CHANGE_ACTION_UNSPECIFIED = 0;
+  ZONE_CHANGE_ACTION_CREATE_ZONE = 1;
+  ZONE_CHANGE_ACTION_DELETE_ZONE = 2;
+  ZONE_CHANGE_ACTION_UPDATE_ZONE = 3;
+}
+
+enum RRSetChangeAction {
+  RR_SET_CHANGE_ACTION_UNSPECIFIED = 0;
+  RR_SET_CHANGE_ACTION_CREATE = 1;
+  RR_SET_CHANGE_ACTION_UPSERT = 2;
+  RR_SET_CHANGE_ACTION_DELETE = 3;
+}
+
+enum RRType {
+  RR_TYPE_UNSPECIFIED = 0;
+  RR_TYPE_SOA = 1;
+  RR_TYPE_NS = 2;
+  RR_TYPE_A = 3;
+  RR_TYPE_AAAA = 4;
+  RR_TYPE_CNAME = 5;
+  RR_TYPE_MX = 6;
+  RR_TYPE_TXT = 7;
+  RR_TYPE_SRV = 8;
+  RR_TYPE_PTR = 9;
+  RR_TYPE_CAA = 10;
+  RR_TYPE_NAPTR = 11;
+  RR_TYPE_DS = 12;
+  RR_TYPE_DNSKEY = 13;
+  RR_TYPE_RRSIG = 14;
+  RR_TYPE_NSEC = 15;
+  RR_TYPE_TLSA = 16;
+  RR_TYPE_SPF = 17;
+}
+
+// ResourceRecord is the structure for a single resource record.
+message ResourceRecord {
+  string value = 1;
+}
+
+// ResourceRecordSet represents a set of resource records.
+message ResourceRecordSet {
+  string name = 1;
+  RRType type = 2;
+  uint32 ttl = 3;
+  repeated ResourceRecord resource_records = 4;
+}
+
+// ResourceRecordSetChange represents a change in a resource record set.
+message ResourceRecordSetChange {
+  RRSetChangeAction action = 1;
+  ResourceRecordSet resource_record_set = 2;
+}
+
+// ZoneChange represents a change to a specific zone.
+message ZoneChangeEvent {
+  string zone_name = 1;
+  ZoneChangeAction action = 2;
+  repeated ResourceRecordSetChange changes = 3;
+  google.protobuf.Timestamp created_at = 4;
+}

@@ -15,7 +15,7 @@ type ChangeInfo struct {
 func NewChangeInfoFromDomain(changeInfo domain.ChangeInfo) ChangeInfo {
 	return ChangeInfo{
 		ID:          changeInfo.ID.String(),
-		Status:      changeInfo.Status,
+		Status:      string(changeInfo.Status),
 		SubmittedAt: changeInfo.SubmittedAt.Format("2006-01-02T15:04:05Z"),
 	}
 }

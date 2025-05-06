@@ -27,3 +27,5 @@ go.work.sum
 Thumbs.db
 
 .env
+
+*.pb.go

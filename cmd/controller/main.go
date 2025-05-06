@@ -52,13 +52,14 @@ func run(ctx context.Context, w io.Writer) error {
 	}
 
 	controller, err := controller.NewServer(ctx, controller.ControllerSettings{
-		Port:            cfg.Port,
-		DBHost:          cfg.DBHost,
-		DBName:          cfg.DBName,
-		DBUser:          cfg.DBUser,
-		DBPassword:      cfg.DBPass,
-		DBPort:          cfg.DBPort,
-		OutboxBatchSize: cfg.OutboxBatchSize,
+		Port:                   cfg.Port,
+		DBHost:                 cfg.DBHost,
+		DBName:                 cfg.DBName,
+		DBUser:                 cfg.DBUser,
+		DBPassword:             cfg.DBPass,
+		DBPort:                 cfg.DBPort,
+		OutboxBatchSize:        cfg.OutboxBatchSize,
+		OutboxProcessorEnabled: cfg.OutboxProcessorEnabled,
 	})
 
 	if err != nil {
