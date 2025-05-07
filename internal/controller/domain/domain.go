@@ -46,7 +46,7 @@ const (
 
 type ZoneInfo struct {
 	Zone          Zone
-	DelegationSet DelegationSet
+	DelegationSet *DelegationSet
 }
 
 type CreateZoneResult struct {
@@ -55,8 +55,9 @@ type CreateZoneResult struct {
 }
 
 type Zone struct {
-	ID   uuid.UUID
-	Name string
+	ID        uuid.UUID
+	Name      string
+	IsPrivate bool
 }
 
 type ResourceRecordSet struct {

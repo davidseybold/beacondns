@@ -2,8 +2,7 @@ CREATE TABLE
     nameservers (
         id UUID PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
-        ip_address VARCHAR(45) NOT NULL,
-        route_key VARCHAR(255) NOT NULL,
+        routing_key VARCHAR(255) NOT NULL,
         UNIQUE (name)
     );
 
@@ -22,8 +21,9 @@ CREATE TABLE
 CREATE TABLE
     zones (
         id UUID PRIMARY KEY,
-        delegation_set_id UUID NOT NULL,
+        delegation_set_id UUID,
         name VARCHAR(255) NOT NULL UNIQUE,
+        is_private BOOLEAN NOT NULL DEFAULT TRUE,
         FOREIGN KEY (delegation_set_id) REFERENCES delegation_sets (id) ON DELETE CASCADE
     );
 
@@ -83,7 +83,7 @@ CREATE TABLE
 CREATE TABLE
     outbox (
         id UUID PRIMARY KEY,
-        route_key VARCHAR(255) NOT NULL,
+        routing_key VARCHAR(255) NOT NULL,
         payload BYTEA NOT NULL,
         created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
     );

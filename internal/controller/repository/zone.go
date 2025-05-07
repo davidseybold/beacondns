@@ -13,7 +13,7 @@ const (
 	insertDelegationSetQuery            = "INSERT INTO delegation_sets (id) VALUES ($1) RETURNING id;"
 	insertDelegationSetNameServersQuery = "INSERT INTO delegation_set_nameservers (delegation_set_id, nameserver_id) VALUES($1, $2);"
 
-	insertZoneQuery = "INSERT INTO zones(id, name, delegation_set_id) VALUES ($1, $2, $3);"
+	insertZoneQuery = "INSERT INTO zones(id, name, delegation_set_id, is_private) VALUES ($1, $2, $3, $4);"
 
 	insertResourceRecordSetQuery = "INSERT INTO resource_record_sets (id, zone_id, name, record_type, ttl) VALUES ($1, $2, $3, $4, $5);"
 	insertResourceRecordQuery    = "INSERT INTO resource_records (resource_record_set_id, value) VALUES ($1, $2);"
@@ -46,7 +46,7 @@ type PostgresZoneRepository struct {
 
 type CreateZoneParams struct {
 	Zone          domain.Zone
-	DelegationSet domain.DelegationSet
+	DelegationSet *domain.DelegationSet
 	SOA           domain.ResourceRecordSet
 	NS            domain.ResourceRecordSet
 	Change        domain.ZoneChange
@@ -54,11 +54,15 @@ type CreateZoneParams struct {
 }
 
 func (p *PostgresZoneRepository) CreateZone(ctx context.Context, params CreateZoneParams) (*domain.ChangeInfo, error) {
-	if err := p.insertDelegationSet(ctx, params.DelegationSet); err != nil {
-		return nil, err
+	var delegationSetID *uuid.UUID
+	if params.DelegationSet != nil {
+		if err := p.insertDelegationSet(ctx, *params.DelegationSet); err != nil {
+			return nil, err
+		}
+		delegationSetID = &params.DelegationSet.ID
 	}
 
-	if _, err := p.db.Exec(ctx, insertZoneQuery, params.Zone.ID, params.Zone.Name, params.DelegationSet.ID); err != nil {
+	if _, err := p.db.Exec(ctx, insertZoneQuery, params.Zone.ID, params.Zone.Name, delegationSetID, params.Zone.IsPrivate); err != nil {
 		return nil, err
 	}
 

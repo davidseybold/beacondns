@@ -3,7 +3,7 @@ package api
 import "github.com/davidseybold/beacondns/internal/controller/domain"
 
 type CreateZoneRequest struct {
-	Name string `json:"name"`
+	Name string `json:"name" binding:"required"`
 }
 
 type ChangeInfo struct {
@@ -25,12 +25,17 @@ type DelegationSet struct {
 	NameServers []string `json:"nameServers"`
 }
 
-func NewDelegationSetFromDomain(ds domain.DelegationSet) DelegationSet {
+func NewDelegationSetFromDomain(ds *domain.DelegationSet) *DelegationSet {
+	if ds == nil {
+		return nil
+	}
+
 	nameServers := make([]string, len(ds.NameServers))
 	for i, ns := range ds.NameServers {
 		nameServers[i] = ns.Name
 	}
-	return DelegationSet{
+
+	return &DelegationSet{
 		ID:          ds.ID.String(),
 		NameServers: nameServers,
 	}
@@ -49,9 +54,9 @@ func NewZoneFromDomain(zone domain.Zone) Zone {
 }
 
 type CreateZoneResponse struct {
-	ChangeInfo    ChangeInfo    `json:"changeInfo"`
-	DelegationSet DelegationSet `json:"delegationSet"`
-	Zone          Zone          `json:"zone"`
+	ChangeInfo    ChangeInfo     `json:"changeInfo"`
+	DelegationSet *DelegationSet `json:"delegationSet,omitempty"`
+	Zone          Zone           `json:"zone"`
 }
 
 func NewCreateZoneResponse(res domain.CreateZoneResult) CreateZoneResponse {
@@ -90,4 +95,8 @@ type ErrorResponse struct {
 
 type ListNameServersResponse struct {
 	NameServers []NameServer `json:"nameServers"`
+}
+
+type ListZonesResponse struct {
+	Zones []Zone `json:"zones"`
 }

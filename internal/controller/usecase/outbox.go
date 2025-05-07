@@ -8,6 +8,10 @@ import (
 	"github.com/google/uuid"
 )
 
+const (
+	beaconExchange = "beacon"
+)
+
 type OutboxService interface {
 	ProcessNextBatch(ctx context.Context, batchSize int) (int, error)
 }
@@ -39,7 +43,7 @@ func (d *DefaultOutboxService) ProcessNextBatch(ctx context.Context, batchSize i
 	msgsIDsToDelete := make([]uuid.UUID, 0, len(pendingMsgs))
 
 	for _, msg := range pendingMsgs {
-		if err := d.publisher.Publish(ctx, "", msg.RouteKey, msg.Payload); err != nil {
+		if err := d.publisher.Publish(ctx, beaconExchange, msg.RouteKey, msg.Payload); err != nil {
 			continue
 		}
 		msgsIDsToDelete = append(msgsIDsToDelete, msg.ID)

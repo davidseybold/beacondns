@@ -103,7 +103,8 @@ func start(ctx context.Context, w io.Writer) error {
 		return fmt.Errorf("failed to create publisher: %w", err)
 	}
 
-	controllerService := usecase.NewControllerService(repoRegistry)
+	zoneService := usecase.NewZoneService(repoRegistry)
+	nameServerService := usecase.NewNameServerService(repoRegistry)
 	outboxService := usecase.NewOutboxService(repoRegistry, publisher)
 
 	outboxCtx, cancelOutbox := context.WithCancel(ctx)
@@ -113,7 +114,7 @@ func start(ctx context.Context, w io.Writer) error {
 	{
 		httpServer := &http.Server{
 			Addr:    fmt.Sprintf(":%d", cfg.Port),
-			Handler: api.NewHTTPHandler(controllerService),
+			Handler: api.NewHTTPHandler(zoneService, nameServerService),
 		}
 		g.Add(
 			func() error {
