@@ -73,7 +73,7 @@ func (d *DefaultZoneService) CreateZone(ctx context.Context, name string) (*doma
 		}
 	} else {
 		ds = nil
-		nameServerNames = []string{}
+		nameServerNames = []string{"ns00.beacondns.org.", "ns01.beacondns.org."}
 	}
 
 	primaryNS := nameServerNames[0]

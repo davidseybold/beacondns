@@ -10,10 +10,10 @@ import (
 )
 
 const (
-	insertNameserverQuery = "INSERT INTO nameservers (id, name, route_key, ip_address) VALUES ($1, $2, $3, $4) RETURNING id, name, route_key, ip_address;"
-	listNameserversQuery  = "SELECT id, name, route_key, ip_address FROM nameservers ORDER BY name;"
+	insertNameserverQuery = "INSERT INTO nameservers (id, name, routing_key) VALUES ($1, $2, $3) RETURNING id, name, routing_key;"
+	listNameserversQuery  = "SELECT id, name, routing_key FROM nameservers ORDER BY name;"
 
-	selectRandomNameServersQuery = "SELECT id, name, route_key, ip_address FROM nameservers ORDER BY RANDOM() LIMIT $1;"
+	selectRandomNameServersQuery = "SELECT id, name, routing_key FROM nameservers ORDER BY RANDOM() LIMIT $1;"
 )
 
 type NameServerRepository interface {
@@ -31,8 +31,7 @@ func NewPostgresNameServerRepository() *PostgresNameServerRepository {
 }
 
 func (p *PostgresNameServerRepository) AddNameServer(ctx context.Context, ns *domain.NameServer) (*domain.NameServer, error) {
-
-	row := p.db.QueryRow(ctx, insertNameserverQuery, ns.ID, ns.Name, ns.RouteKey, ns.IPAddress)
+	row := p.db.QueryRow(ctx, insertNameserverQuery, ns.ID, ns.Name, ns.RouteKey)
 
 	dbNs, err := scanNameServer(row)
 	if err != nil {
@@ -81,7 +80,7 @@ func scanNameServers(rows pgx.Rows) ([]domain.NameServer, error) {
 
 func scanNameServer(row pgx.Row) (*domain.NameServer, error) {
 	var ns domain.NameServer
-	if err := row.Scan(&ns.ID, &ns.Name, &ns.RouteKey, &ns.IPAddress); err != nil {
+	if err := row.Scan(&ns.ID, &ns.Name, &ns.RouteKey); err != nil {
 		return nil, err
 	}
 

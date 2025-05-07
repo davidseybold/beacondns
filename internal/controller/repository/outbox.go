@@ -17,7 +17,7 @@ const (
 	VALUES ($1, $2, $3);
 	`
 	deleteOutboxMessagesQuery  = "DELETE FROM outbox WHERE id = ANY($1)"
-	selectPendingMessagesQuery = "SELECT id, payload, route_key FROM outbox ORDER BY created_at DESC LIMIT $1"
+	selectPendingMessagesQuery = "SELECT id, payload, route_key FROM outbox ORDER BY created_at ASC LIMIT $1"
 )
 
 type OutboxRepository interface {
