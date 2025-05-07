@@ -3,25 +3,52 @@ package usecase
 import (
 	"context"
 
-	"github.com/davidseybold/beacondns/internal/controller/domain"
+	"github.com/davidseybold/beacondns/internal/controller/repository"
+	"github.com/davidseybold/beacondns/internal/libs/messaging"
+	"github.com/google/uuid"
 )
 
 type OutboxService interface {
-	SendOutboxMessage(ctx context.Context, msg domain.OutboxMessage) error
+	ProcessNextBatch(ctx context.Context, batchSize int) (int, error)
 }
 
 var _ OutboxService = (*DefaultOutboxService)(nil)
 
 type DefaultOutboxService struct {
+	repoRegistry repository.Registry
+	publisher    messaging.Publisher
 }
 
-func NewOutboxService() *DefaultOutboxService {
-	return &DefaultOutboxService{}
+func NewOutboxService(reg repository.Registry, publisher messaging.Publisher) *DefaultOutboxService {
+	return &DefaultOutboxService{
+		repoRegistry: reg,
+		publisher:    publisher,
+	}
 }
 
-func (d *DefaultOutboxService) SendOutboxMessage(ctx context.Context, msg domain.OutboxMessage) error {
-	// This method is a placeholder for sending outbox messages.
-	// In a real implementation, this would involve writing the message to a message queue.
-	// For now, we will just return nil to indicate success.
-	return nil
+func (d *DefaultOutboxService) ProcessNextBatch(ctx context.Context, batchSize int) (int, error) {
+	pendingMsgs, err := d.repoRegistry.GetOutboxRepository().GetPendingMessages(context.Background(), batchSize)
+	if err != nil {
+		return -1, err
+	}
+
+	if len(pendingMsgs) == 0 {
+		return 0, nil
+	}
+
+	msgsIDsToDelete := make([]uuid.UUID, 0, len(pendingMsgs))
+
+	for _, msg := range pendingMsgs {
+		if err := d.publisher.Publish(ctx, "", msg.RouteKey, msg.Payload); err != nil {
+			continue
+		}
+		msgsIDsToDelete = append(msgsIDsToDelete, msg.ID)
+
+	}
+
+	if err := d.repoRegistry.GetOutboxRepository().DeleteMessages(context.Background(), msgsIDsToDelete); err != nil {
+		return len(msgsIDsToDelete), err
+	}
+
+	return len(msgsIDsToDelete), nil
 }
