@@ -4,14 +4,19 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
-	"os/signal"
 	"strings"
 
 	"github.com/caarlos0/env/v11"
 	"github.com/joho/godotenv"
+	"github.com/oklog/run"
 
-	"github.com/davidseybold/beacondns/internal/controller"
+	"github.com/davidseybold/beacondns/internal/controller/api"
+	"github.com/davidseybold/beacondns/internal/controller/outbox"
+	"github.com/davidseybold/beacondns/internal/controller/repository"
+	"github.com/davidseybold/beacondns/internal/controller/usecase"
+	"github.com/davidseybold/beacondns/internal/libs/db/postgres"
 )
 
 type serviceConfig struct {
@@ -27,15 +32,13 @@ type serviceConfig struct {
 
 func main() {
 	ctx := context.Background()
-	if err := run(ctx, os.Stdout); err != nil {
+	if err := start(ctx, os.Stdout); err != nil {
 		fmt.Fprintf(os.Stderr, "%s\n", err)
 		os.Exit(1)
 	}
 }
 
-func run(ctx context.Context, w io.Writer) error {
-	ctx, cancel := signal.NotifyContext(ctx, os.Interrupt)
-	defer cancel()
+func start(ctx context.Context, w io.Writer) error {
 
 	environment := os.Getenv("BEACON_ENV")
 	if strings.ToUpper(environment) == "LOCAL" {
@@ -51,24 +54,57 @@ func run(ctx context.Context, w io.Writer) error {
 		return err
 	}
 
-	controller, err := controller.NewServer(ctx, controller.ControllerSettings{
-		Port:                   cfg.Port,
-		DBHost:                 cfg.DBHost,
-		DBName:                 cfg.DBName,
-		DBUser:                 cfg.DBUser,
-		DBPassword:             cfg.DBPass,
-		DBPort:                 cfg.DBPort,
-		OutboxBatchSize:        cfg.OutboxBatchSize,
-		OutboxProcessorEnabled: cfg.OutboxProcessorEnabled,
+	db, err := postgres.NewConnectionPool(ctx, postgres.Config{
+		Host:     cfg.DBHost,
+		DBName:   cfg.DBName,
+		User:     cfg.DBUser,
+		Password: cfg.DBPass,
+		Port:     cfg.DBPort,
 	})
-
 	if err != nil {
-		return err
+		return fmt.Errorf("error creating connection pool: %w", err)
+	}
+	defer db.Close()
+
+	repoRegistry := repository.NewPostgresRepositoryRegistry(db)
+
+	controllerService := usecase.NewControllerService(repoRegistry)
+	outboxService := usecase.NewOutboxService()
+
+	outboxCtx, cancelOutbox := context.WithCancel(ctx)
+
+	outboxProcessor := outbox.NewProcessor(outboxCtx, repoRegistry, outboxService, cfg.OutboxBatchSize)
+
+	var g run.Group
+	{
+		httpServer := &http.Server{
+			Addr:    fmt.Sprintf(":%d", cfg.Port),
+			Handler: api.NewHTTPHandler(controllerService),
+		}
+		g.Add(
+			func() error {
+				if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+					return err
+				}
+				return nil
+			},
+			func(_ error) {
+				httpServer.Shutdown(context.Background())
+			},
+		)
+	}
+	{
+		g.Add(
+			func() error {
+				return outboxProcessor.Run()
+			},
+			func(_ error) {
+				cancelOutbox()
+			},
+		)
 	}
 
-	if err := controller.Start(ctx); err != nil {
-		return err
-	}
+	g.Add(run.SignalHandler(ctx, os.Interrupt))
 
-	return nil
+	return g.Run()
 }

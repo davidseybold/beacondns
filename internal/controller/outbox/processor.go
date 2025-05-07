@@ -7,63 +7,47 @@ import (
 
 	"github.com/davidseybold/beacondns/internal/controller/repository"
 	"github.com/davidseybold/beacondns/internal/controller/usecase"
-	"github.com/davidseybold/beacondns/internal/libs/supervisor"
 	"github.com/google/uuid"
 )
 
 type Processor struct {
+	ctx           context.Context
 	repoRegistry  repository.Registry
 	outboxService usecase.OutboxService
-
-	cancel    context.CancelFunc
-	done      chan struct{}
-	batchSize int
+	batchSize     int
 }
 
-var _ supervisor.Process = (*Processor)(nil)
-
-func NewProcessor(r repository.Registry, s usecase.OutboxService, batchSize int) *Processor {
+func NewProcessor(ctx context.Context, r repository.Registry, s usecase.OutboxService, batchSize int) *Processor {
 	return &Processor{
+		ctx:           ctx,
 		repoRegistry:  r,
 		outboxService: s,
 		batchSize:     batchSize,
 	}
 }
 
-func (p *Processor) Start() error {
-	ctx, cancel := context.WithCancel(context.Background())
-	p.cancel = cancel
-	p.done = make(chan struct{})
+func (p *Processor) Run() error {
+	go p.process()
+	<-p.ctx.Done()
 
-	go func() {
-		ticker := time.NewTicker(1 * time.Second)
-		defer func() {
-			ticker.Stop()
-			close(p.done)
-		}()
-
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				p.process()
-			}
-		}
-	}()
-
-	return nil
-}
-
-func (p *Processor) Stop() error {
-	if p.cancel != nil {
-		p.cancel()
-	}
-	<-p.done
-	return nil
+	return p.ctx.Err()
 }
 
 func (p *Processor) process() {
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-p.ctx.Done():
+			return
+		case <-ticker.C:
+			p.processOutbox()
+		}
+	}
+}
+
+func (p *Processor) processOutbox() {
 	pendingMsgs, err := p.repoRegistry.GetOutboxRepository().GetPendingMessages(context.Background(), p.batchSize)
 	if err != nil {
 		log.Printf("Error fetching pending messages: %v", err)

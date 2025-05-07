@@ -5,9 +5,9 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/golang/protobuf/proto"
 	"github.com/google/uuid"
 	"github.com/miekg/dns"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/davidseybold/beacondns/internal/controller/domain"
 	"github.com/davidseybold/beacondns/internal/controller/repository"
@@ -137,7 +137,7 @@ func (d *DefaultControllerService) CreateZone(ctx context.Context, name string) 
 		msgs[i] = domain.OutboxMessage{
 			ID:       uuid.New(),
 			Payload:  payload,
-			RouteKey: ns.RouteKey,
+			RouteKey: fmt.Sprintf("nameserver.%s", ns.RouteKey),
 		}
 	}
 

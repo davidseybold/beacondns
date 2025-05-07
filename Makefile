@@ -87,7 +87,7 @@ test:
 	@echo ">> Running tests..."
 	$(GO) test -v ./...
 
-lint: install-tools
+lint:
 	@echo ">> Linting..."
 	golangci-lint run
 

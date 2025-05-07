@@ -73,7 +73,7 @@ CREATE TABLE
     zone_change_syncs (
         zone_change_id UUID NOT NULL,
         nameserver_id UUID NOT NULL,
-        status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'SENT', 'ACKED', 'FAILED')),
+        status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'INSYNC')),
         synced_at TIMESTAMPTZ,
         PRIMARY KEY (zone_change_id, nameserver_id),
         FOREIGN KEY (zone_change_id) REFERENCES zone_changes (id) ON DELETE CASCADE,

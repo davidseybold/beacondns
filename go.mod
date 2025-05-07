@@ -5,11 +5,11 @@ go 1.24.2
 require (
 	github.com/caarlos0/env/v11 v11.3.1
 	github.com/gin-gonic/gin v1.10.0
-	github.com/golang/protobuf v1.5.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.7.4
 	github.com/joho/godotenv v1.5.1
 	github.com/miekg/dns v1.1.65
+	github.com/oklog/run v1.1.0
 	github.com/pkg/errors v0.9.1
 	golang.org/x/sync v0.13.0
 	google.golang.org/protobuf v1.34.1
