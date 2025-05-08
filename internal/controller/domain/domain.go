@@ -44,20 +44,14 @@ const (
 	RRTypeSPF    RRType = "SPF"
 )
 
-type ZoneInfo struct {
-	Zone          Zone
-	DelegationSet *DelegationSet
-}
-
 type CreateZoneResult struct {
-	ZoneInfo
+	Zone       Zone
 	ChangeInfo ChangeInfo
 }
 
 type Zone struct {
-	ID        uuid.UUID
-	Name      string
-	IsPrivate bool
+	ID   uuid.UUID
+	Name string
 }
 
 type ResourceRecordSet struct {
@@ -99,18 +93,6 @@ type ChangeInfo struct {
 	ID          uuid.UUID
 	Status      ChangeSyncStatus
 	SubmittedAt time.Time
-}
-
-type NameServer struct {
-	ID        uuid.UUID
-	Name      string
-	IPAddress string
-	RouteKey  string
-}
-
-type DelegationSet struct {
-	ID          uuid.UUID
-	NameServers []NameServer
 }
 
 type OutboxMessage struct {

@@ -2,7 +2,6 @@ package usecase
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -45,36 +44,11 @@ func (d *DefaultZoneService) CreateZone(ctx context.Context, name string) (*doma
 	zoneName := dns.Fqdn(name)
 
 	zone := domain.Zone{
-		ID:        uuid.New(),
-		Name:      zoneName,
-		IsPrivate: true,
+		ID:   uuid.New(),
+		Name: zoneName,
 	}
 
-	var (
-		ds              *domain.DelegationSet
-		nameServerNames []string
-	)
-
-	if !zone.IsPrivate {
-		nameServers, err := d.registry.GetNameServerRepository().GetRandomNameServers(ctx, delegationSetSize)
-		if err != nil {
-			return nil, err
-		} else if len(nameServers) < delegationSetSize {
-			return nil, errors.New("not enough name servers available")
-		}
-
-		ds = &domain.DelegationSet{
-			ID:          uuid.New(),
-			NameServers: nameServers,
-		}
-
-		for _, ns := range nameServers {
-			nameServerNames = append(nameServerNames, ns.Name)
-		}
-	} else {
-		ds = nil
-		nameServerNames = []string{"ns00.beacondns.org.", "ns01.beacondns.org."}
-	}
+	nameServerNames := []string{"ns00.beacondns.org.", "ns01.beacondns.org."}
 
 	primaryNS := nameServerNames[0]
 
@@ -124,36 +98,20 @@ func (d *DefaultZoneService) CreateZone(ctx context.Context, name string) (*doma
 	}
 
 	zoneChangeEvent := newZoneChangeEvent(zoneName, domain.ZoneChangeActionCreateZone, rrSetChanges)
-	payload, err := proto.Marshal(zoneChangeEvent)
+	_, err := proto.Marshal(zoneChangeEvent)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal zone change event: %w", err)
 	}
 
-	msgs := make([]domain.OutboxMessage, len(ds.NameServers))
-	for i, ns := range ds.NameServers {
-		msgs[i] = domain.OutboxMessage{
-			ID:       uuid.New(),
-			Payload:  payload,
-			RouteKey: fmt.Sprintf("nameserver.%s", ns.RouteKey),
-		}
-	}
-
-	var syncs []domain.ZoneChangeSync
-	for _, ns := range ds.NameServers {
-		syncs = append(syncs, domain.ZoneChangeSync{
-			ZoneChangeID: change.ID,
-			NameServerID: ns.ID,
-			Status:       domain.ChangeSyncStatusPending,
-		})
-	}
+	syncs := make([]domain.ZoneChangeSync, 0)
+	msgs := make([]domain.OutboxMessage, 0)
 
 	params := repository.CreateZoneParams{
-		Zone:          zone,
-		DelegationSet: ds,
-		SOA:           soa,
-		NS:            nsRec,
-		Change:        change,
-		Syncs:         syncs,
+		Zone:   zone,
+		SOA:    soa,
+		NS:     nsRec,
+		Change: change,
+		Syncs:  syncs,
 	}
 
 	createZoneFunc := func(ctx context.Context, r repository.Registry) (any, error) {
@@ -180,10 +138,7 @@ func (d *DefaultZoneService) CreateZone(ctx context.Context, name string) (*doma
 	}
 
 	return &domain.CreateZoneResult{
-		ZoneInfo: domain.ZoneInfo{
-			Zone:          zone,
-			DelegationSet: ds,
-		},
+		Zone:       zone,
 		ChangeInfo: *changeInfo,
 	}, nil
 }

@@ -104,7 +104,6 @@ func start(ctx context.Context, w io.Writer) error {
 	}
 
 	zoneService := usecase.NewZoneService(repoRegistry)
-	nameServerService := usecase.NewNameServerService(repoRegistry)
 	outboxService := usecase.NewOutboxService(repoRegistry, publisher)
 
 	outboxCtx, cancelOutbox := context.WithCancel(ctx)
@@ -114,7 +113,7 @@ func start(ctx context.Context, w io.Writer) error {
 	{
 		httpServer := &http.Server{
 			Addr:    fmt.Sprintf(":%d", cfg.Port),
-			Handler: api.NewHTTPHandler(zoneService, nameServerService),
+			Handler: api.NewHTTPHandler(zoneService),
 		}
 		g.Add(
 			func() error {

@@ -8,26 +8,24 @@ import (
 	"github.com/google/uuid"
 )
 
-func NewHTTPHandler(zoneService usecase.ZoneService, nameServerService usecase.NameServerService) http.Handler {
+func NewHTTPHandler(zoneService usecase.ZoneService) http.Handler {
 	r := gin.Default()
 
 	handler := &handler{
-		zoneService:       zoneService,
-		nameServerService: nameServerService,
+		zoneService: zoneService,
 	}
 
 	r.GET("/health", handler.Health)
-	r.POST("/nameservers", handler.AddNameServer)
-	r.GET("/nameservers", handler.ListNameServers)
 
 	r.POST("/zones", handler.CreateZone)
+	r.GET("/zones", handler.ListZones)
+	r.GET("/zones/:id", handler.GetZone)
 
 	return r
 }
 
 type handler struct {
-	zoneService       usecase.ZoneService
-	nameServerService usecase.NameServerService
+	zoneService usecase.ZoneService
 }
 
 func (h *handler) Health(c *gin.Context) {
@@ -105,59 +103,4 @@ func (h *handler) GetZone(c *gin.Context) {
 		ID:   zone.ID.String(),
 		Name: zone.Name,
 	})
-}
-
-func (h *handler) AddNameServer(c *gin.Context) {
-	var body AddNameServerRequest
-	if err := c.ShouldBindJSON(&body); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Code:    "BadRequest",
-			Message: err.Error(),
-		})
-		return
-	}
-
-	ns, err := h.nameServerService.AddNameServer(c.Request.Context(), body.Name, body.RouteKey, body.IPAddress)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Code:    "InternalServerError",
-			Message: err.Error(),
-		})
-		return
-	}
-
-	c.JSON(http.StatusCreated, AddNameServerResponse{
-		NameServer: NameServer{
-			ID:        ns.ID.String(),
-			Name:      ns.Name,
-			RouteKey:  ns.RouteKey,
-			IPAddress: ns.IPAddress,
-		},
-	})
-}
-
-func (h *handler) ListNameServers(c *gin.Context) {
-	nameServers, err := h.nameServerService.ListNameServers(c.Request.Context())
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Code:    "InternalServerError",
-			Message: err.Error(),
-		})
-		return
-	}
-
-	responseBody := ListNameServersResponse{
-		NameServers: make([]NameServer, len(nameServers)),
-	}
-
-	for i, ns := range nameServers {
-		responseBody.NameServers[i] = NameServer{
-			ID:        ns.ID.String(),
-			Name:      ns.Name,
-			RouteKey:  ns.RouteKey,
-			IPAddress: ns.IPAddress,
-		}
-	}
-
-	c.JSON(http.StatusOK, responseBody)
 }

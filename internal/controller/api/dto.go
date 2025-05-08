@@ -20,27 +20,6 @@ func NewChangeInfoFromDomain(changeInfo domain.ChangeInfo) ChangeInfo {
 	}
 }
 
-type DelegationSet struct {
-	ID          string   `json:"id"`
-	NameServers []string `json:"nameServers"`
-}
-
-func NewDelegationSetFromDomain(ds *domain.DelegationSet) *DelegationSet {
-	if ds == nil {
-		return nil
-	}
-
-	nameServers := make([]string, len(ds.NameServers))
-	for i, ns := range ds.NameServers {
-		nameServers[i] = ns.Name
-	}
-
-	return &DelegationSet{
-		ID:          ds.ID.String(),
-		NameServers: nameServers,
-	}
-}
-
 type Zone struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
@@ -54,47 +33,23 @@ func NewZoneFromDomain(zone domain.Zone) Zone {
 }
 
 type CreateZoneResponse struct {
-	ChangeInfo    ChangeInfo     `json:"changeInfo"`
-	DelegationSet *DelegationSet `json:"delegationSet,omitempty"`
-	Zone          Zone           `json:"zone"`
+	ChangeInfo ChangeInfo `json:"changeInfo"`
+	Zone       Zone       `json:"zone"`
 }
 
 func NewCreateZoneResponse(res domain.CreateZoneResult) CreateZoneResponse {
-	ds := NewDelegationSetFromDomain(res.DelegationSet)
 	changeInfo := NewChangeInfoFromDomain(res.ChangeInfo)
 	zone := NewZoneFromDomain(res.Zone)
 
 	return CreateZoneResponse{
-		ChangeInfo:    changeInfo,
-		DelegationSet: ds,
-		Zone:          zone,
+		ChangeInfo: changeInfo,
+		Zone:       zone,
 	}
-}
-
-type AddNameServerRequest struct {
-	Name      string `json:"name" binding:"required"`
-	RouteKey  string `json:"routeKey" binding:"required"`
-	IPAddress string `json:"ipAddress" binding:"required"`
-}
-
-type AddNameServerResponse struct {
-	NameServer NameServer `json:"nameServer"`
-}
-
-type NameServer struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	RouteKey  string `json:"routeKey"`
-	IPAddress string `json:"ipAddress"`
 }
 
 type ErrorResponse struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
-}
-
-type ListNameServersResponse struct {
-	NameServers []NameServer `json:"nameServers"`
 }
 
 type ListZonesResponse struct {

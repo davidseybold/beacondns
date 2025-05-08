@@ -10,18 +10,14 @@ import (
 )
 
 const (
-	insertDelegationSetQuery            = "INSERT INTO delegation_sets (id) VALUES ($1) RETURNING id;"
-	insertDelegationSetNameServersQuery = "INSERT INTO delegation_set_nameservers (delegation_set_id, nameserver_id) VALUES($1, $2);"
-
-	insertZoneQuery = "INSERT INTO zones(id, name, delegation_set_id, is_private) VALUES ($1, $2, $3, $4);"
+	insertZoneQuery = "INSERT INTO zones(id, name) VALUES ($1, $2);"
 
 	insertResourceRecordSetQuery = "INSERT INTO resource_record_sets (id, zone_id, name, record_type, ttl) VALUES ($1, $2, $3, $4, $5);"
 	insertResourceRecordQuery    = "INSERT INTO resource_records (resource_record_set_id, value) VALUES ($1, $2);"
 
-	// TODO: Update created_at to submitted_at
 	insertZoneChangeQuery = `
 	INSERT INTO zone_changes (id, zone_id, action)
-	VALUES ($1, $2, $3) RETURNING created_at
+	VALUES ($1, $2, $3) RETURNING submitted_at
 	`
 	insertResourceRecordSetChangeQuery = `
 	INSERT INTO resource_record_set_changes (
@@ -45,24 +41,17 @@ type PostgresZoneRepository struct {
 }
 
 type CreateZoneParams struct {
-	Zone          domain.Zone
-	DelegationSet *domain.DelegationSet
-	SOA           domain.ResourceRecordSet
-	NS            domain.ResourceRecordSet
-	Change        domain.ZoneChange
-	Syncs         []domain.ZoneChangeSync
+	Zone   domain.Zone
+	SOA    domain.ResourceRecordSet
+	NS     domain.ResourceRecordSet
+	Change domain.ZoneChange
+	Syncs  []domain.ZoneChangeSync
 }
 
 func (p *PostgresZoneRepository) CreateZone(ctx context.Context, params CreateZoneParams) (*domain.ChangeInfo, error) {
 	var delegationSetID *uuid.UUID
-	if params.DelegationSet != nil {
-		if err := p.insertDelegationSet(ctx, *params.DelegationSet); err != nil {
-			return nil, err
-		}
-		delegationSetID = &params.DelegationSet.ID
-	}
 
-	if _, err := p.db.Exec(ctx, insertZoneQuery, params.Zone.ID, params.Zone.Name, delegationSetID, params.Zone.IsPrivate); err != nil {
+	if _, err := p.db.Exec(ctx, insertZoneQuery, params.Zone.ID, params.Zone.Name, delegationSetID); err != nil {
 		return nil, err
 	}
 
@@ -82,20 +71,6 @@ func (p *PostgresZoneRepository) CreateZone(ctx context.Context, params CreateZo
 	}
 
 	return changeInfo, nil
-}
-
-func (p *PostgresZoneRepository) insertDelegationSet(ctx context.Context, ds domain.DelegationSet) error {
-	if _, err := p.db.Exec(ctx, insertDelegationSetQuery, ds.ID); err != nil {
-		return err
-	}
-
-	for _, ns := range ds.NameServers {
-		if _, err := p.db.Exec(ctx, insertDelegationSetNameServersQuery, ds.ID, ns.ID); err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 func (p *PostgresZoneRepository) insertResourceRecordSets(ctx context.Context, zoneID uuid.UUID, recordSets []domain.ResourceRecordSet) error {

@@ -14,7 +14,6 @@ import (
 type Registry interface {
 	GetZoneRepository() ZoneRepository
 	GetOutboxRepository() OutboxRepository
-	GetNameServerRepository() NameServerRepository
 }
 
 type Transactor interface {
@@ -37,11 +36,6 @@ func NewPostgresRepositoryRegistry(db postgres.PgxPool) *PostgresRepositoryRegis
 	return &PostgresRepositoryRegistry{
 		db: db,
 	}
-}
-
-func (r *PostgresRepositoryRegistry) GetNameServerRepository() NameServerRepository {
-	db := r.getQueryer()
-	return &PostgresNameServerRepository{db}
 }
 
 func (r *PostgresRepositoryRegistry) GetZoneRepository() ZoneRepository {
