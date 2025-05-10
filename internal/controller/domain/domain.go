@@ -33,6 +33,13 @@ type Zone struct {
 	Name string    `json:"name"`
 }
 
+func NewZone(name string) Zone {
+	return Zone{
+		ID:   uuid.New(),
+		Name: name,
+	}
+}
+
 type ChangeWithTargets struct {
 	beacondomain.Change
 	Targets []ChangeTarget `json:"targets"`

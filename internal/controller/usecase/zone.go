@@ -59,39 +59,9 @@ func (d *DefaultZoneService) CreateZone(ctx context.Context, name string) (*cont
 
 	primaryNS := nameServerNames[0]
 
-	soa := beacondomain.ResourceRecordSet{
-		Name: zoneName,
-		Type: beacondomain.RRTypeSOA,
-		TTL:  900,
-		ResourceRecords: []beacondomain.ResourceRecord{
-			{
-				Value: fmt.Sprintf(
-					"%s %s %d %d %d %d %d",
-					primaryNS,
-					hostmasterEmail,
-					soaSerial,
-					soaRefresh,
-					soaRetry,
-					soaExpire,
-					soaMinimumTTL,
-				),
-			},
-		},
-	}
+	soa := beacondomain.NewSOA(zoneName, 900, primaryNS, hostmasterEmail, soaSerial, soaRefresh, soaRetry, soaExpire, soaMinimumTTL)
 
-	nsRecRecords := make([]beacondomain.ResourceRecord, len(nameServerNames))
-	for i, name := range nameServerNames {
-		nsRecRecords[i] = beacondomain.ResourceRecord{
-			Value: name,
-		}
-	}
-
-	nsRec := beacondomain.ResourceRecordSet{
-		Name:            zoneName,
-		Type:            beacondomain.RRTypeNS,
-		TTL:             172800,
-		ResourceRecords: nsRecRecords,
-	}
+	nsRec := beacondomain.NewNS(zoneName, 172800, nameServerNames)
 
 	params := repository.CreateZoneParams{
 		Zone: zone,
@@ -99,26 +69,12 @@ func (d *DefaultZoneService) CreateZone(ctx context.Context, name string) (*cont
 		NS:   nsRec,
 	}
 
-	zoneChange := beacondomain.ZoneChange{
-		ZoneName: zoneName,
-		Action:   beacondomain.ZoneChangeActionCreate,
-		Changes: []beacondomain.ResourceRecordSetChange{
-			{
-				Action:            beacondomain.RRSetChangeActionCreate,
-				ResourceRecordSet: soa,
-			},
-			{
-				Action:            beacondomain.RRSetChangeActionCreate,
-				ResourceRecordSet: nsRec,
-			},
-		},
-	}
+	zoneChange := beacondomain.NewZoneChange(zoneName, beacondomain.ZoneChangeActionCreate, []beacondomain.ResourceRecordSetChange{
+		beacondomain.NewResourceRecordSetChange(beacondomain.RRSetChangeActionCreate, soa),
+		beacondomain.NewResourceRecordSetChange(beacondomain.RRSetChangeActionCreate, nsRec),
+	})
 
-	change := beacondomain.Change{
-		ID:         uuid.New(),
-		Type:       beacondomain.ChangeTypeZone,
-		ZoneChange: &zoneChange,
-	}
+	change := beacondomain.NewChangeWithZoneChange(zoneChange)
 
 	targetServers, err := d.registry.GetServerRepository().GetAllServers(ctx)
 	if err != nil {
