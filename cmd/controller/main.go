@@ -12,14 +12,11 @@ import (
 	"github.com/caarlos0/env/v11"
 	"github.com/joho/godotenv"
 	"github.com/oklog/run"
-	amqp "github.com/rabbitmq/amqp091-go"
 
 	"github.com/davidseybold/beacondns/internal/controller/api"
-	"github.com/davidseybold/beacondns/internal/controller/outbox"
 	"github.com/davidseybold/beacondns/internal/controller/repository"
 	"github.com/davidseybold/beacondns/internal/controller/usecase"
 	"github.com/davidseybold/beacondns/internal/libs/db/postgres"
-	"github.com/davidseybold/beacondns/internal/libs/messaging"
 )
 
 type serviceConfig struct {
@@ -91,23 +88,9 @@ func start(ctx context.Context, w io.Writer) error {
 	}
 	defer db.Close()
 
-	publisherConn, err := amqp.Dial(cfg.RabbitHost)
-	if err != nil {
-		return fmt.Errorf("failed to connect to RabbitMQ: %w", err)
-	}
-	defer publisherConn.Close()
-
 	repoRegistry := repository.NewPostgresRepositoryRegistry(db)
-	publisher, err := messaging.NewRabbitMQPublisher(publisherConn)
-	if err != nil {
-		return fmt.Errorf("failed to create publisher: %w", err)
-	}
 
 	zoneService := usecase.NewZoneService(repoRegistry)
-	outboxService := usecase.NewOutboxService(repoRegistry, publisher)
-
-	outboxCtx, cancelOutbox := context.WithCancel(ctx)
-	outboxProcessor := outbox.NewProcessor(outboxCtx, outboxService, cfg.OutboxBatchSize)
 
 	var g run.Group
 	{
@@ -128,16 +111,6 @@ func start(ctx context.Context, w io.Writer) error {
 				if err := httpServer.Shutdown(shutdownCtx); err != nil {
 					fmt.Fprintf(w, "error shutting down HTTP server: %s\n", err)
 				}
-			},
-		)
-	}
-	{
-		g.Add(
-			func() error {
-				return outboxProcessor.Run()
-			},
-			func(_ error) {
-				cancelOutbox()
 			},
 		)
 	}

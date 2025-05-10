@@ -4,99 +4,55 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	beacondomain "github.com/davidseybold/beacondns/internal/domain"
 )
 
-type ZoneChangeAction string
-type RRSetChangeAction string
-type ChangeSyncStatus string
-type RRType string
+type ChangeStatus string
+type ChangeTargetStatus string
+type ChangeType string
 
 const (
-	ZoneChangeActionCreateZone ZoneChangeAction = "CREATE_ZONE"
-	ZoneChangeActionDeleteZone ZoneChangeAction = "DELETE_ZONE"
-	ZoneChangeActionUpdateZone ZoneChangeAction = "UPDATE_ZONE"
+	ChangeStatusPending ChangeStatus = "PENDING"
+	ChangeStatusInSync  ChangeStatus = "INSYNC"
 
-	RRSetChangeActionCreate RRSetChangeAction = "CREATE"
-	RRSetChangeActionUpsert RRSetChangeAction = "UPSERT"
-	RRSetChangeActionDelete RRSetChangeAction = "DELETE"
+	ChangeTargetStatusPending ChangeTargetStatus = "PENDING"
+	ChangeTargetStatusSent    ChangeTargetStatus = "SENT"
+	ChangeTargetStatusInSync  ChangeTargetStatus = "INSYNC"
 
-	ChangeSyncStatusPending ChangeSyncStatus = "PENDING"
-	ChangeSyncStatusInSync  ChangeSyncStatus = "INSYNC"
-)
-
-const (
-	RRTypeSOA    RRType = "SOA"
-	RRTypeNS     RRType = "NS"
-	RRTypeA      RRType = "A"
-	RRTypeAAAA   RRType = "AAAA"
-	RRTypeCNAME  RRType = "CNAME"
-	RRTypeMX     RRType = "MX"
-	RRTypeTXT    RRType = "TXT"
-	RRTypeSRV    RRType = "SRV"
-	RRTypePTR    RRType = "PTR"
-	RRTypeCAA    RRType = "CAA"
-	RRTypeNAPTR  RRType = "NAPTR"
-	RRTypeDS     RRType = "DS"
-	RRTypeDNSKEY RRType = "DNSKEY"
-	RRTypeRRSIG  RRType = "RRSIG"
-	RRTypeNSEC   RRType = "NSEC"
-	RRTypeTLSA   RRType = "TLSA"
-	RRTypeSPF    RRType = "SPF"
+	ChangeTypeZone ChangeType = "ZONE"
 )
 
 type CreateZoneResult struct {
-	Zone       Zone
-	ChangeInfo ChangeInfo
+	Zone       Zone       `json:"zone"`
+	ChangeInfo ChangeInfo `json:"changeInfo"`
 }
 
 type Zone struct {
-	ID   uuid.UUID
-	Name string
+	ID   uuid.UUID `json:"id"`
+	Name string    `json:"name"`
 }
 
-type ResourceRecordSet struct {
-	ID              uuid.UUID
-	Name            string
-	Type            RRType
-	TTL             uint
-	ResourceRecords []ResourceRecord
+type ChangeWithTargets struct {
+	beacondomain.Change
+	Targets []ChangeTarget `json:"targets"`
 }
 
-type ResourceRecord struct {
-	Value string
-}
-
-type ChangeBatch struct {
-	Changes []ResourceRecordSetChange
-}
-
-type ResourceRecordSetChange struct {
-	Action            RRSetChangeAction
-	ResourceRecordSet ResourceRecordSet
-}
-
-type ZoneChange struct {
-	ID      uuid.UUID
-	ZoneID  uuid.UUID
-	Action  ZoneChangeAction
-	Changes []ResourceRecordSetChange
-}
-
-type ZoneChangeSync struct {
-	ZoneChangeID uuid.UUID
-	NameServerID uuid.UUID
-	Status       ChangeSyncStatus
-	SyncedAt     *time.Time
+type ChangeTarget struct {
+	ID       uuid.UUID          `json:"id"`
+	ChangeID uuid.UUID          `json:"changeId"`
+	ServerID uuid.UUID          `json:"serverId"`
+	Status   ChangeTargetStatus `json:"status"`
+	SyncedAt *time.Time         `json:"syncedAt,omitempty"`
 }
 
 type ChangeInfo struct {
-	ID          uuid.UUID
-	Status      ChangeSyncStatus
-	SubmittedAt time.Time
+	ID          uuid.UUID    `json:"id"`
+	Status      ChangeStatus `json:"status"`
+	SubmittedAt time.Time    `json:"submittedAt"`
 }
 
-type OutboxMessage struct {
-	ID       uuid.UUID
-	Payload  []byte
-	RouteKey string
+type Server struct {
+	ID   uuid.UUID `json:"id"`
+	Name string    `json:"name"`
 }

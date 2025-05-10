@@ -13,7 +13,8 @@ import (
 
 type Registry interface {
 	GetZoneRepository() ZoneRepository
-	GetOutboxRepository() OutboxRepository
+	GetChangeRepository() ChangeRepository
+	GetServerRepository() ServerRepository
 }
 
 type Transactor interface {
@@ -43,9 +44,14 @@ func (r *PostgresRepositoryRegistry) GetZoneRepository() ZoneRepository {
 	return &PostgresZoneRepository{db}
 }
 
-func (r *PostgresRepositoryRegistry) GetOutboxRepository() OutboxRepository {
+func (r *PostgresRepositoryRegistry) GetChangeRepository() ChangeRepository {
 	db := r.getQueryer()
-	return &PostgresOutboxRepository{db}
+	return &PostgresChangeRepository{db}
+}
+
+func (r *PostgresRepositoryRegistry) GetServerRepository() ServerRepository {
+	db := r.getQueryer()
+	return &PostgresServerRepository{db}
 }
 
 func (r *PostgresRepositoryRegistry) getQueryer() postgres.Queryer {

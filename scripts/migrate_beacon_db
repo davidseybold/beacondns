@@ -34,6 +34,6 @@ read -s -p "Password for $user_name: " password
 echo
 
 # Run migration
-migrate -path=migrations/controller \
+migrate -path=migrations \
   -database "postgresql://${user_name}:${password}@localhost:5432/beacon_db?sslmode=disable" \
   "${migrate_args[@]}"

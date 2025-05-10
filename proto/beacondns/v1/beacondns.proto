@@ -9,9 +9,9 @@ option go_package = "github.com/davidseybold/beacondns/internal/libs/gen/proto/b
 // Constants for zone and resource record set actions
 enum ZoneChangeAction {
   ZONE_CHANGE_ACTION_UNSPECIFIED = 0;
-  ZONE_CHANGE_ACTION_CREATE_ZONE = 1;
-  ZONE_CHANGE_ACTION_DELETE_ZONE = 2;
-  ZONE_CHANGE_ACTION_UPDATE_ZONE = 3;
+  ZONE_CHANGE_ACTION_CREATE = 1;
+  ZONE_CHANGE_ACTION_UPDATE = 2;
+  ZONE_CHANGE_ACTION_DELETE = 3;
 }
 
 enum RRSetChangeAction {
@@ -42,12 +42,15 @@ enum RRType {
   RR_TYPE_SPF = 17;
 }
 
-// ResourceRecord is the structure for a single resource record.
+enum ChangeType {
+  CHANGE_TYPE_UNSPECIFIED = 0;
+  CHANGE_TYPE_ZONE = 1;
+}
+
 message ResourceRecord {
   string value = 1;
 }
 
-// ResourceRecordSet represents a set of resource records.
 message ResourceRecordSet {
   string name = 1;
   RRType type = 2;
@@ -55,16 +58,25 @@ message ResourceRecordSet {
   repeated ResourceRecord resource_records = 4;
 }
 
-// ResourceRecordSetChange represents a change in a resource record set.
 message ResourceRecordSetChange {
   RRSetChangeAction action = 1;
   ResourceRecordSet resource_record_set = 2;
 }
 
-// ZoneChange represents a change to a specific zone.
-message ZoneChangeEvent {
+message ZoneChange {
   string zone_name = 1;
   ZoneChangeAction action = 2;
   repeated ResourceRecordSetChange changes = 3;
-  google.protobuf.Timestamp created_at = 4;
+}
+
+message Change {
+  string id = 1;
+  ChangeType type = 2;
+  optional ZoneChange zone_change = 3;
+  google.protobuf.Timestamp submitted_at = 4;
+}
+
+message ChangeAck {
+  string change_target_id = 1;
+  google.protobuf.Timestamp synced_at = 2;
 }

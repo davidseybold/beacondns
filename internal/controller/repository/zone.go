@@ -2,9 +2,11 @@ package repository
 
 import (
 	"context"
-	"encoding/json"
+	"fmt"
 
-	"github.com/davidseybold/beacondns/internal/controller/domain"
+	controllerdomain "github.com/davidseybold/beacondns/internal/controller/domain"
+	"github.com/davidseybold/beacondns/internal/domain"
+	beacondomain "github.com/davidseybold/beacondns/internal/domain"
 	"github.com/davidseybold/beacondns/internal/libs/db/postgres"
 	"github.com/google/uuid"
 )
@@ -12,28 +14,12 @@ import (
 const (
 	insertZoneQuery = "INSERT INTO zones(id, name) VALUES ($1, $2);"
 
-	insertResourceRecordSetQuery = "INSERT INTO resource_record_sets (id, zone_id, name, record_type, ttl) VALUES ($1, $2, $3, $4, $5);"
+	insertResourceRecordSetQuery = "INSERT INTO resource_record_sets (zone_id, name, record_type, ttl) VALUES ($1, $2, $3, $4) RETURNING id;"
 	insertResourceRecordQuery    = "INSERT INTO resource_records (resource_record_set_id, value) VALUES ($1, $2);"
-
-	insertZoneChangeQuery = `
-	INSERT INTO zone_changes (id, zone_id, action)
-	VALUES ($1, $2, $3) RETURNING submitted_at
-	`
-	insertResourceRecordSetChangeQuery = `
-	INSERT INTO resource_record_set_changes (
-    	zone_change_id, action, name, record_type, ttl, record_values, ordering
-	)
-	VALUES ($1, $2, $3, $4, $5, $6, $7);
-	`
-
-	insertZoneChangeSyncQuery = `
-	INSERT INTO zone_change_syncs (zone_change_id, nameserver_id, status)
-	VALUES ($1, $2, $3)
-	`
 )
 
 type ZoneRepository interface {
-	CreateZone(ctx context.Context, params CreateZoneParams) (*domain.ChangeInfo, error)
+	CreateZone(ctx context.Context, params CreateZoneParams) error
 }
 
 type PostgresZoneRepository struct {
@@ -41,94 +27,39 @@ type PostgresZoneRepository struct {
 }
 
 type CreateZoneParams struct {
-	Zone   domain.Zone
-	SOA    domain.ResourceRecordSet
-	NS     domain.ResourceRecordSet
-	Change domain.ZoneChange
-	Syncs  []domain.ZoneChangeSync
+	Zone controllerdomain.Zone
+	SOA  beacondomain.ResourceRecordSet
+	NS   beacondomain.ResourceRecordSet
 }
 
-func (p *PostgresZoneRepository) CreateZone(ctx context.Context, params CreateZoneParams) (*domain.ChangeInfo, error) {
-	var delegationSetID *uuid.UUID
+func (p *PostgresZoneRepository) CreateZone(ctx context.Context, params CreateZoneParams) error {
 
-	if _, err := p.db.Exec(ctx, insertZoneQuery, params.Zone.ID, params.Zone.Name, delegationSetID); err != nil {
-		return nil, err
+	if _, err := p.db.Exec(ctx, insertZoneQuery, params.Zone.ID, params.Zone.Name); err != nil {
+		return fmt.Errorf("failed to create zone %s: %w", params.Zone.Name, err)
 	}
 
 	if err := p.insertResourceRecordSets(ctx, params.Zone.ID, []domain.ResourceRecordSet{params.SOA, params.NS}); err != nil {
-		return nil, err
+		return fmt.Errorf("failed to create initial resource record sets for zone %s: %w", params.Zone.Name, err)
 	}
 
-	changeInfo, err := p.insertZoneChange(ctx, params.Change)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, sync := range params.Syncs {
-		if _, err := p.db.Exec(ctx, insertZoneChangeSyncQuery, sync.ZoneChangeID, sync.NameServerID, sync.Status); err != nil {
-			return nil, err
-		}
-	}
-
-	return changeInfo, nil
+	return nil
 }
 
 func (p *PostgresZoneRepository) insertResourceRecordSets(ctx context.Context, zoneID uuid.UUID, recordSets []domain.ResourceRecordSet) error {
 	for _, recordSet := range recordSets {
+		row := p.db.QueryRow(ctx, insertResourceRecordSetQuery, zoneID, recordSet.Name, recordSet.Type, recordSet.TTL)
 
-		if _, err := p.db.Exec(ctx, insertResourceRecordSetQuery, recordSet.ID, zoneID, recordSet.Name, recordSet.Type, recordSet.TTL); err != nil {
-			return err
+		var id int
+		err := row.Scan(&id)
+		if err != nil {
+			return fmt.Errorf("failed to create resource record set %s of type %s for zone %s: %w", recordSet.Name, recordSet.Type, zoneID, err)
 		}
 
 		for _, rr := range recordSet.ResourceRecords {
-			if _, err := p.db.Exec(ctx, insertResourceRecordQuery, recordSet.ID, rr.Value); err != nil {
-				return err
+			if _, err := p.db.Exec(ctx, insertResourceRecordQuery, id, rr.Value); err != nil {
+				return fmt.Errorf("failed to create resource record with value %s for record set %d: %w", rr.Value, id, err)
 			}
 		}
 	}
 	return nil
-}
-
-func (p *PostgresZoneRepository) insertZoneChange(ctx context.Context, change domain.ZoneChange) (*domain.ChangeInfo, error) {
-	row := p.db.QueryRow(ctx, insertZoneChangeQuery, change.ID, change.ZoneID, change.Action)
-
-	changeInfo := &domain.ChangeInfo{
-		ID:     change.ID,
-		Status: domain.ChangeSyncStatusPending,
-	}
-	if err := row.Scan(&changeInfo.SubmittedAt); err != nil {
-		return nil, err
-	}
-
-	for i, rrcChange := range change.Changes {
-		values := getRecordSetValues(rrcChange.ResourceRecordSet)
-		b, err := json.Marshal(values)
-		if err != nil {
-			return nil, err
-		}
-
-		if _, err := p.db.Exec(
-			ctx,
-			insertResourceRecordSetChangeQuery,
-			change.ID,
-			rrcChange.Action,
-			rrcChange.ResourceRecordSet.Name,
-			rrcChange.ResourceRecordSet.Type,
-			rrcChange.ResourceRecordSet.TTL,
-			b, // record values
-			i+1,
-		); err != nil {
-			return nil, err
-		}
-	}
-
-	return changeInfo, nil
-}
-
-func getRecordSetValues(rrs domain.ResourceRecordSet) []string {
-	values := make([]string, len(rrs.ResourceRecords))
-	for i, rr := range rrs.ResourceRecords {
-		values[i] = rr.Value
-	}
-	return values
 }

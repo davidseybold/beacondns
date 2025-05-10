@@ -6,26 +6,33 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/miekg/dns"
-	"google.golang.org/protobuf/proto"
 
-	"github.com/davidseybold/beacondns/internal/controller/domain"
+	controllerdomain "github.com/davidseybold/beacondns/internal/controller/domain"
 	"github.com/davidseybold/beacondns/internal/controller/repository"
+	beacondomain "github.com/davidseybold/beacondns/internal/domain"
 )
 
 const (
 	delegationSetSize = 2
 	hostmasterEmail   = "hostmaster.beacondns.org"
+
+	// SOA record values
+	soaSerial     = 1
+	soaRefresh    = 7200    // 2 hours
+	soaRetry      = 900     // 15 minutes
+	soaExpire     = 1209600 // 2 weeks
+	soaMinimumTTL = 86400   // 1 day
 )
 
 type ZoneService interface {
 	// Zone management
-	CreateZone(ctx context.Context, name string) (*domain.CreateZoneResult, error)
-	GetZone(ctx context.Context, id uuid.UUID) (*domain.Zone, error)
-	ListZones(ctx context.Context) ([]domain.Zone, error)
+	CreateZone(ctx context.Context, name string) (*controllerdomain.CreateZoneResult, error)
+	GetZone(ctx context.Context, id uuid.UUID) (*controllerdomain.Zone, error)
+	ListZones(ctx context.Context) ([]controllerdomain.Zone, error)
 
 	// Resource record management
-	ListResourceRecordSets(ctx context.Context, zoneID uuid.UUID) ([]domain.ResourceRecordSet, error)
-	ChangeResourceRecordSets(ctx context.Context, zoneID uuid.UUID, rrc domain.ChangeBatch) (*domain.ChangeInfo, error)
+	ListResourceRecordSets(ctx context.Context, zoneID uuid.UUID) ([]beacondomain.ResourceRecordSet, error)
+	ChangeResourceRecordSets(ctx context.Context, zoneID uuid.UUID, rrc []beacondomain.ResourceRecordSetChange) (*controllerdomain.ChangeInfo, error)
 }
 
 type DefaultZoneService struct {
@@ -40,10 +47,10 @@ func NewZoneService(r repository.TransactorRegistry) *DefaultZoneService {
 	}
 }
 
-func (d *DefaultZoneService) CreateZone(ctx context.Context, name string) (*domain.CreateZoneResult, error) {
+func (d *DefaultZoneService) CreateZone(ctx context.Context, name string) (*controllerdomain.CreateZoneResult, error) {
 	zoneName := dns.Fqdn(name)
 
-	zone := domain.Zone{
+	zone := controllerdomain.Zone{
 		ID:   uuid.New(),
 		Name: zoneName,
 	}
@@ -52,79 +59,100 @@ func (d *DefaultZoneService) CreateZone(ctx context.Context, name string) (*doma
 
 	primaryNS := nameServerNames[0]
 
-	soa := domain.ResourceRecordSet{
-		ID:   uuid.New(),
+	soa := beacondomain.ResourceRecordSet{
 		Name: zoneName,
-		Type: domain.RRTypeSOA,
+		Type: beacondomain.RRTypeSOA,
 		TTL:  900,
-		ResourceRecords: []domain.ResourceRecord{
+		ResourceRecords: []beacondomain.ResourceRecord{
 			{
-				Value: fmt.Sprintf("%s %s %d %d %d %d %d", primaryNS, hostmasterEmail, 1, 7200, 900, 1209600, 86400),
+				Value: fmt.Sprintf(
+					"%s %s %d %d %d %d %d",
+					primaryNS,
+					hostmasterEmail,
+					soaSerial,
+					soaRefresh,
+					soaRetry,
+					soaExpire,
+					soaMinimumTTL,
+				),
 			},
 		},
 	}
 
-	nsRecRecords := make([]domain.ResourceRecord, len(nameServerNames))
+	nsRecRecords := make([]beacondomain.ResourceRecord, len(nameServerNames))
 	for i, name := range nameServerNames {
-		nsRecRecords[i] = domain.ResourceRecord{
+		nsRecRecords[i] = beacondomain.ResourceRecord{
 			Value: name,
 		}
 	}
 
-	nsRec := domain.ResourceRecordSet{
-		ID:              uuid.New(),
+	nsRec := beacondomain.ResourceRecordSet{
 		Name:            zoneName,
-		Type:            domain.RRTypeNS,
+		Type:            beacondomain.RRTypeNS,
 		TTL:             172800,
 		ResourceRecords: nsRecRecords,
 	}
 
-	rrSetChanges := []domain.ResourceRecordSetChange{
-		{
-			Action:            domain.RRSetChangeActionCreate,
-			ResourceRecordSet: soa,
-		},
-		{
-			Action:            domain.RRSetChangeActionCreate,
-			ResourceRecordSet: nsRec,
-		},
-	}
-
-	change := domain.ZoneChange{
-		ID:      uuid.New(),
-		ZoneID:  zone.ID,
-		Action:  domain.ZoneChangeActionCreateZone,
-		Changes: rrSetChanges,
-	}
-
-	zoneChangeEvent := newZoneChangeEvent(zoneName, domain.ZoneChangeActionCreateZone, rrSetChanges)
-	_, err := proto.Marshal(zoneChangeEvent)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal zone change event: %w", err)
-	}
-
-	syncs := make([]domain.ZoneChangeSync, 0)
-	msgs := make([]domain.OutboxMessage, 0)
-
 	params := repository.CreateZoneParams{
-		Zone:   zone,
-		SOA:    soa,
-		NS:     nsRec,
-		Change: change,
-		Syncs:  syncs,
+		Zone: zone,
+		SOA:  soa,
+		NS:   nsRec,
+	}
+
+	zoneChange := beacondomain.ZoneChange{
+		ZoneName: zoneName,
+		Action:   beacondomain.ZoneChangeActionCreate,
+		Changes: []beacondomain.ResourceRecordSetChange{
+			{
+				Action:            beacondomain.RRSetChangeActionCreate,
+				ResourceRecordSet: soa,
+			},
+			{
+				Action:            beacondomain.RRSetChangeActionCreate,
+				ResourceRecordSet: nsRec,
+			},
+		},
+	}
+
+	change := beacondomain.Change{
+		ID:         uuid.New(),
+		Type:       beacondomain.ChangeTypeZone,
+		ZoneChange: &zoneChange,
+	}
+
+	targetServers, err := d.registry.GetServerRepository().GetAllServers(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get target servers: %w", err)
+	}
+
+	changeTargets := make([]controllerdomain.ChangeTarget, len(targetServers))
+
+	for i, server := range targetServers {
+		changeTargets[i] = controllerdomain.ChangeTarget{
+			ID:       uuid.New(),
+			ChangeID: change.ID,
+			ServerID: server.ID,
+			Status:   controllerdomain.ChangeTargetStatusPending,
+		}
 	}
 
 	createZoneFunc := func(ctx context.Context, r repository.Registry) (any, error) {
-		out, err := r.GetZoneRepository().CreateZone(ctx, params)
+		err := r.GetZoneRepository().CreateZone(ctx, params)
 		if err != nil {
 			return nil, err
 		}
 
-		if err = r.GetOutboxRepository().InsertMessages(ctx, msgs); err != nil {
+		change, err := r.GetChangeRepository().CreateChange(ctx, change)
+		if err != nil {
 			return nil, err
 		}
 
-		return out, nil
+		err = r.GetChangeRepository().CreateChangeTargets(ctx, changeTargets)
+		if err != nil {
+			return nil, err
+		}
+
+		return change, nil
 	}
 
 	rawResult, err := d.registry.WithinTransaction(ctx, createZoneFunc)
@@ -132,29 +160,33 @@ func (d *DefaultZoneService) CreateZone(ctx context.Context, name string) (*doma
 		return nil, fmt.Errorf("failed to create zone: %w", err)
 	}
 
-	changeInfo, ok := rawResult.(*domain.ChangeInfo)
+	chResult, ok := rawResult.(*beacondomain.Change)
 	if !ok {
 		return nil, fmt.Errorf("unexpected result type: %T", rawResult)
 	}
 
-	return &domain.CreateZoneResult{
-		Zone:       zone,
-		ChangeInfo: *changeInfo,
+	return &controllerdomain.CreateZoneResult{
+		Zone: zone,
+		ChangeInfo: controllerdomain.ChangeInfo{
+			ID:          chResult.ID,
+			Status:      controllerdomain.ChangeStatusPending,
+			SubmittedAt: *chResult.SubmittedAt,
+		},
 	}, nil
 }
 
-func (d *DefaultZoneService) GetZone(ctx context.Context, id uuid.UUID) (*domain.Zone, error) {
+func (d *DefaultZoneService) GetZone(ctx context.Context, id uuid.UUID) (*controllerdomain.Zone, error) {
 	panic("unimplemented")
 }
 
-func (d *DefaultZoneService) ListZones(ctx context.Context) ([]domain.Zone, error) {
+func (d *DefaultZoneService) ListZones(ctx context.Context) ([]controllerdomain.Zone, error) {
 	panic("unimplemented")
 }
 
-func (d *DefaultZoneService) ChangeResourceRecordSets(ctx context.Context, zoneID uuid.UUID, b domain.ChangeBatch) (*domain.ChangeInfo, error) {
+func (d *DefaultZoneService) ChangeResourceRecordSets(ctx context.Context, zoneID uuid.UUID, b []beacondomain.ResourceRecordSetChange) (*controllerdomain.ChangeInfo, error) {
 	panic("unimplemented")
 }
 
-func (d *DefaultZoneService) ListResourceRecordSets(ctx context.Context, zoneID uuid.UUID) ([]domain.ResourceRecordSet, error) {
+func (d *DefaultZoneService) ListResourceRecordSets(ctx context.Context, zoneID uuid.UUID) ([]beacondomain.ResourceRecordSet, error) {
 	panic("unimplemented")
 }
