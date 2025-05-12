@@ -156,9 +156,11 @@ func (s *Syncer) sendChangeToTarget(ctx context.Context, change *beacondomain.Ch
 		return fmt.Errorf("failed to marshal change: %w", err)
 	}
 
+	routingKey := fmt.Sprintf("server.%s.%s", target.Server.Type, target.Server.HostName)
+
 	err = s.publisher.Publish(
 		ctx,
-		fmt.Sprintf("server.%s.%s", target.Server.Type, target.Server.HostName),
+		routingKey,
 		headers,
 		protoChangeBytes,
 	)
@@ -185,14 +187,9 @@ func (s *Syncer) handleAcknowledgment(body []byte, headers messaging.Headers) er
 		return messaging.NewConsumerError(fmt.Errorf("failed to unmarshal acknowledgment: %w", err), false)
 	}
 
-	hostRaw, ok := headers[messaging.HeaderKeyHost]
+	host, ok := headers.GetString(messaging.HeaderKeyHost)
 	if !ok {
-		return messaging.NewConsumerError(errors.New("missing server_id in message headers"), false)
-	}
-
-	host, ok := hostRaw.(string)
-	if !ok {
-		return messaging.NewConsumerError(errors.New("server_id is not a string"), false)
+		return messaging.NewConsumerError(errors.New("host header not found"), false)
 	}
 
 	changeID, err := uuid.Parse(ackMsg.ChangeId)

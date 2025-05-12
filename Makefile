@@ -4,12 +4,10 @@ APP_NAME := beacon-dns
 BIN_DIR := bin
 
 CONTROLLER_DIR := ./cmd/controller
-AGENT_DIR := ./cmd/agent
-CLI_DIR := ./cmd/cli
+RESOLVER_DIR := ./cmd/resolver
 
 CONTROLLER_BIN := $(BIN_DIR)/controller
-AGENT_BIN := $(BIN_DIR)/agent
-CLI_BIN := $(BIN_DIR)/beacon
+RESOLVER_BIN := $(BIN_DIR)/resolver
 
 GO := go
 
@@ -61,26 +59,18 @@ build-controller: generate-grpc
 	@echo ">> Building controller..."
 	$(GO) build -o $(CONTROLLER_BIN) $(CONTROLLER_DIR)
 
-build-agent: generate-grpc
-	@echo ">> Building agent..."
-	$(GO) build -o $(AGENT_BIN) $(AGENT_DIR)
-
-build-cli:
-	@echo ">> Building CLI..."
-	$(GO) build -o $(CLI_BIN) $(CLI_DIR)
+build-resolver: generate-grpc
+	@echo ">> Building resolver..."
+	$(GO) build -o $(RESOLVER_BIN) $(RESOLVER_DIR)
 
 # Run Targets
 run-controller: build-controller
 	@echo ">> Running controller..."
 	BEACON_ENV=local $(CONTROLLER_BIN)
 
-run-agent: build-agent
-	@echo ">> Running agent..."
-	$(AGENT_BIN)
-
-run-cli: build-cli
-	@echo ">> Running CLI..."
-	$(CLI_BIN)
+run-resolver: build-resolver
+	@echo ">> Running resolver..."
+	BEACON_ENV=local $(RESOLVER_BIN)
 
 # Utility Targets
 test:

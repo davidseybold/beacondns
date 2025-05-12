@@ -28,16 +28,14 @@ const (
 )
 
 type serviceConfig struct {
-	Port                   int    `env:"BEACON_CONTROLLER_PORT" envDefault:"8080"`
-	DBHost                 string `env:"BEACON_DB_HOST"`
-	DBName                 string `env:"BEACON_DB_NAME" envDefault:"beacon_db"`
-	DBUser                 string `env:"BEACON_DB_USER" envDefault:"beacon_controller"`
-	DBPass                 string `env:"BEACON_DB_PASSWORD"`
-	DBPort                 int    `env:"BEACON_DB_PORT" envDefault:"5432"`
-	OutboxProcessorEnabled bool   `env:"BEACON_OUTBOX_PROCESSOR_ENABLED" envDefault:"true"`
-	OutboxBatchSize        int    `env:"BEACON_OUTBOX_BATCH_SIZE" envDefault:"10"`
-	RabbitHost             string `env:"BEACON_RABBITMQ_HOST"`
-	ShutdownTimeout        int    `env:"BEACON_SHUTDOWN_TIMEOUT" envDefault:"30"`
+	Port            int    `env:"BEACON_CONTROLLER_PORT" envDefault:"8080"`
+	DBHost          string `env:"BEACON_DB_HOST"`
+	DBName          string `env:"BEACON_DB_NAME" envDefault:"beacon_db"`
+	DBUser          string `env:"BEACON_DB_USER" envDefault:"beacon_controller"`
+	DBPass          string `env:"BEACON_DB_PASSWORD"`
+	DBPort          int    `env:"BEACON_DB_PORT" envDefault:"5432"`
+	RabbitHost      string `env:"BEACON_RABBITMQ_HOST"`
+	ShutdownTimeout int    `env:"BEACON_SHUTDOWN_TIMEOUT" envDefault:"30"`
 }
 
 func (c *serviceConfig) Validate() error {
@@ -47,9 +45,7 @@ func (c *serviceConfig) Validate() error {
 	if c.DBPort <= 0 || c.DBPort > 65535 {
 		return fmt.Errorf("invalid database port number: %d", c.DBPort)
 	}
-	if c.OutboxBatchSize <= 0 {
-		return fmt.Errorf("invalid outbox batch size: %d", c.OutboxBatchSize)
-	}
+
 	if c.ShutdownTimeout <= 0 {
 		return fmt.Errorf("invalid shutdown timeout: %d", c.ShutdownTimeout)
 	}
@@ -66,22 +62,9 @@ func main() {
 
 func start(ctx context.Context, w io.Writer) error {
 
-	environment := os.Getenv("BEACON_ENV")
-	if strings.ToUpper(environment) == "LOCAL" {
-		if err := godotenv.Load(); err != nil {
-			return err
-		}
-	}
-
-	var cfg serviceConfig
-	if err := env.ParseWithOptions(&cfg, env.Options{
-		RequiredIfNoDef: true,
-	}); err != nil {
-		return err
-	}
-
-	if err := cfg.Validate(); err != nil {
-		return fmt.Errorf("invalid configuration: %w", err)
+	cfg, err := loadConfig()
+	if err != nil {
+		return fmt.Errorf("error loading configuration: %w", err)
 	}
 
 	db, err := postgres.NewConnectionPool(ctx, postgres.Config{
@@ -176,4 +159,26 @@ func start(ctx context.Context, w io.Writer) error {
 	g.Add(run.SignalHandler(ctx, os.Interrupt))
 
 	return g.Run()
+}
+
+func loadConfig() (*serviceConfig, error) {
+	environment := os.Getenv("BEACON_ENV")
+	if strings.ToUpper(environment) == "LOCAL" {
+		if err := godotenv.Load("cmd/controller/.env"); err != nil {
+			return nil, err
+		}
+	}
+
+	var cfg serviceConfig
+	if err := env.ParseWithOptions(&cfg, env.Options{
+		RequiredIfNoDef: true,
+	}); err != nil {
+		return nil, err
+	}
+
+	if err := cfg.Validate(); err != nil {
+		return nil, fmt.Errorf("invalid configuration: %w", err)
+	}
+
+	return &cfg, nil
 }

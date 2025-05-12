@@ -264,17 +264,17 @@ func (r *RabbitMQConsumer) Consume(ctx context.Context, queue string, handler Ra
 				if !r.autoAck {
 					var consumerErr *ConsumerError
 					if errors.As(err, &consumerErr) {
-						delivery.Nack(false, consumerErr.IsRetryable())
+						_ = delivery.Nack(false, consumerErr.IsRetryable())
 					} else {
 						// Default to retryable for unknown errors
-						delivery.Nack(false, true)
+						_ = delivery.Nack(false, true)
 					}
 				}
 				continue
 			}
 
 			if !r.autoAck {
-				delivery.Ack(false)
+				_ = delivery.Ack(false)
 			}
 		case <-ctx.Done():
 			return ctx.Err()

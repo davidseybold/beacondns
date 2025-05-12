@@ -78,5 +78,4 @@ message Change {
 
 message ChangeAck {
   string change_id = 1;
-  google.protobuf.Timestamp synced_at = 2;
 }

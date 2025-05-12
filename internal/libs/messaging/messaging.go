@@ -18,6 +18,20 @@ type Consumer interface {
 
 type Headers map[string]any
 
+func (h Headers) GetString(key string) (string, bool) {
+	value, ok := h[key]
+	if !ok {
+		return "", false
+	}
+
+	valueStr, ok := value.(string)
+	if !ok {
+		return "", false
+	}
+
+	return valueStr, true
+}
+
 type ConsumerError struct {
 	err       error
 	retryable bool
