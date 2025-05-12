@@ -23,13 +23,21 @@ type amqpChannel interface {
 	ExchangeDelete(name string, ifUnused, noWait bool) error
 	ExchangeBind(destination, key, source string, noWait bool, args amqp.Table) error
 	ExchangeUnbind(destination, key, source string, noWait bool, args amqp.Table) error
-	Consume(queue, consumer string, autoAck, exclusive, noLocal, noWait bool, args amqp.Table) (<-chan amqp.Delivery, error)
+	Consume(
+		queue,
+		consumer string,
+		autoAck,
+		exclusive,
+		noLocal,
+		noWait bool,
+		args amqp.Table,
+	) (<-chan amqp.Delivery, error)
 	Cancel(consumer string, noWait bool) error
 	Confirm(noWait bool) error
 	NotifyPublish(confirm chan amqp.Confirmation) chan amqp.Confirmation
 	NotifyReturn(ret chan amqp.Return) chan amqp.Return
 	NotifyFlow(flow chan bool) chan bool
-	NotifyClose(close chan *amqp.Error) chan *amqp.Error
+	NotifyClose(c chan *amqp.Error) chan *amqp.Error
 	NotifyCancel(cancel chan string) chan string
 	NotifyConfirm(ack, nack chan uint64) (chan uint64, chan uint64)
 }
@@ -44,7 +52,14 @@ func (a *amqpChannelAdapter) Publish(exchange, key string, mandatory, immediate 
 	return a.Channel.Publish(exchange, key, mandatory, immediate, msg)
 }
 
-func (a *amqpChannelAdapter) PublishWithContext(ctx context.Context, exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error {
+func (a *amqpChannelAdapter) PublishWithContext(
+	ctx context.Context,
+	exchange,
+	key string,
+	mandatory,
+	immediate bool,
+	msg amqp.Publishing,
+) error {
 	return a.Channel.PublishWithContext(ctx, exchange, key, mandatory, immediate, msg)
 }
 
@@ -52,7 +67,11 @@ func (a *amqpChannelAdapter) Qos(prefetchCount, prefetchSize int, global bool) e
 	return a.Channel.Qos(prefetchCount, prefetchSize, global)
 }
 
-func (a *amqpChannelAdapter) QueueDeclare(name string, durable, autoDelete, exclusive, noWait bool, args amqp.Table) (amqp.Queue, error) {
+func (a *amqpChannelAdapter) QueueDeclare(
+	name string,
+	durable, autoDelete, exclusive, noWait bool,
+	args amqp.Table,
+) (amqp.Queue, error) {
 	return a.Channel.QueueDeclare(name, durable, autoDelete, exclusive, noWait, args)
 }
 
@@ -72,7 +91,11 @@ func (a *amqpChannelAdapter) QueuePurge(name string, noWait bool) (int, error) {
 	return a.Channel.QueuePurge(name, noWait)
 }
 
-func (a *amqpChannelAdapter) ExchangeDeclare(name, kind string, durable, autoDelete, internal, noWait bool, args amqp.Table) error {
+func (a *amqpChannelAdapter) ExchangeDeclare(
+	name, kind string,
+	durable, autoDelete, internal, noWait bool,
+	args amqp.Table,
+) error {
 	return a.Channel.ExchangeDeclare(name, kind, durable, autoDelete, internal, noWait, args)
 }
 
@@ -88,7 +111,11 @@ func (a *amqpChannelAdapter) ExchangeUnbind(destination, key, source string, noW
 	return a.Channel.ExchangeUnbind(destination, key, source, noWait, args)
 }
 
-func (a *amqpChannelAdapter) Consume(queue, consumer string, autoAck, exclusive, noLocal, noWait bool, args amqp.Table) (<-chan amqp.Delivery, error) {
+func (a *amqpChannelAdapter) Consume(
+	queue, consumer string,
+	autoAck, exclusive, noLocal, noWait bool,
+	args amqp.Table,
+) (<-chan amqp.Delivery, error) {
 	return a.Channel.Consume(queue, consumer, autoAck, exclusive, noLocal, noWait, args)
 }
 
@@ -112,8 +139,8 @@ func (a *amqpChannelAdapter) NotifyFlow(flow chan bool) chan bool {
 	return a.Channel.NotifyFlow(flow)
 }
 
-func (a *amqpChannelAdapter) NotifyClose(close chan *amqp.Error) chan *amqp.Error {
-	return a.Channel.NotifyClose(close)
+func (a *amqpChannelAdapter) NotifyClose(c chan *amqp.Error) chan *amqp.Error {
+	return a.Channel.NotifyClose(c)
 }
 
 func (a *amqpChannelAdapter) NotifyCancel(cancel chan string) chan string {
@@ -193,7 +220,7 @@ func (r *RabbitMQPublisher) Publish(ctx context.Context, routeKey string, header
 			return fmt.Errorf("failed to publish message: %v", confirm)
 		}
 	case err := <-r.close:
-		return fmt.Errorf("channel closed: %v", err)
+		return fmt.Errorf("channel closed: %w", err)
 	case <-ctx.Done():
 		return ctx.Err()
 	}
@@ -234,6 +261,7 @@ func NewRabbitMQConsumer(consumerName string, conn *amqp.Connection) *RabbitMQCo
 }
 
 func (r *RabbitMQConsumer) Consume(ctx context.Context, queue string, handler RabbitMQConsumerHandler) error {
+	var err error
 	channel, err := r.conn.Channel()
 	if err != nil {
 		return err
@@ -259,20 +287,10 @@ func (r *RabbitMQConsumer) Consume(ctx context.Context, queue string, handler Ra
 			if !ok {
 				return nil
 			}
-			err := handler(delivery.Body, Headers(delivery.Headers))
-			if err != nil {
-				if !r.autoAck {
-					var consumerErr *ConsumerError
-					if errors.As(err, &consumerErr) {
-						_ = delivery.Nack(false, consumerErr.IsRetryable())
-					} else {
-						// Default to retryable for unknown errors
-						_ = delivery.Nack(false, true)
-					}
-				}
+			if err = handler(delivery.Body, Headers(delivery.Headers)); err != nil {
+				r.handleDeliveryError(delivery, err)
 				continue
 			}
-
 			if !r.autoAck {
 				_ = delivery.Ack(false)
 			}
@@ -282,12 +300,24 @@ func (r *RabbitMQConsumer) Consume(ctx context.Context, queue string, handler Ra
 	}
 }
 
+func (r *RabbitMQConsumer) handleDeliveryError(delivery amqp.Delivery, err error) {
+	if r.autoAck {
+		return
+	}
+
+	var consumerErr *ConsumerError
+	isRetryable := true
+	if errors.As(err, &consumerErr) {
+		isRetryable = consumerErr.IsRetryable()
+	}
+	_ = delivery.Nack(false, isRetryable)
+}
+
 type RabbitMQExchange struct {
 	Name string
 	Kind string
 }
 
-// RabbitMQTopology represents the exchange and queue configuration
 type RabbitMQTopology struct {
 	Exchange RabbitMQExchange
 	Queues   []string

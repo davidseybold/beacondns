@@ -62,25 +62,22 @@ func (r *PostgresRepositoryRegistry) getQueryer() postgres.Queryer {
 	return r.db
 }
 
-func (r *PostgresRepositoryRegistry) WithinTransaction(ctx context.Context, txFunc TxFunc) (out any, err error) {
+func (r *PostgresRepositoryRegistry) WithinTransaction(ctx context.Context, txFunc TxFunc) (any, error) {
 	registry := r
 
 	var tx postgres.Tx
+	var err error
 	if r.queryer == nil {
 		tx, err = r.db.Begin(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to begin transaction: %w", err)
+		}
 
 		defer func() {
 			if p := recover(); p != nil {
 				_ = tx.Rollback(ctx)
 				panic(p)
 			}
-			if err != nil {
-				if xerr := tx.Rollback(ctx); xerr != nil && !errors.Is(xerr, pgx.ErrTxClosed) {
-					err = fmt.Errorf("rollback failed: %v; original error: %w", xerr, err)
-				}
-				return
-			}
-			err = tx.Commit(ctx)
 		}()
 
 		registry = &PostgresRepositoryRegistry{
@@ -89,7 +86,17 @@ func (r *PostgresRepositoryRegistry) WithinTransaction(ctx context.Context, txFu
 		}
 	}
 
-	out, err = txFunc(ctx, registry)
+	result, err := txFunc(ctx, registry)
+	if err != nil {
+		if xerr := tx.Rollback(ctx); xerr != nil && !errors.Is(xerr, pgx.ErrTxClosed) {
+			return nil, fmt.Errorf("rollback failed: %w; original error: %w", xerr, err)
+		}
+		return nil, err
+	}
 
-	return
+	if err = tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return result, nil
 }

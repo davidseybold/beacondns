@@ -56,6 +56,7 @@ func (r *PostgresServerRepository) GetServerByHostName(ctx context.Context, host
 }
 
 func (r *PostgresServerRepository) GetAllServers(ctx context.Context) ([]*domain.Server, error) {
+	var err error
 	rows, err := r.db.Query(ctx, getAllServersQuery)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query all servers: %w", err)
@@ -64,13 +65,13 @@ func (r *PostgresServerRepository) GetAllServers(ctx context.Context) ([]*domain
 
 	servers := make([]*domain.Server, 0)
 	for rows.Next() {
-		server, err := scanServer(rows)
-		if err != nil {
-			return nil, fmt.Errorf("failed to scan server row: %w", err)
+		server, scanErr := scanServer(rows)
+		if scanErr != nil {
+			return nil, fmt.Errorf("failed to scan server row: %w", scanErr)
 		}
 		servers = append(servers, server)
 	}
-	if err := rows.Err(); err != nil {
+	if err = rows.Err(); err != nil {
 		return nil, fmt.Errorf("error iterating server rows: %w", err)
 	}
 	return servers, nil

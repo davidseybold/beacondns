@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
+	"log/slog"
 
 	"google.golang.org/protobuf/proto"
 
 	beacondnspb "github.com/davidseybold/beacondns/internal/libs/gen/proto/beacondns/v1"
+	"github.com/davidseybold/beacondns/internal/libs/logger"
 	"github.com/davidseybold/beacondns/internal/libs/messaging"
 )
 
@@ -16,21 +17,28 @@ type ChangeListenerConfig struct {
 	Consumer    messaging.Consumer
 	Publisher   messaging.Publisher
 	ChangeQueue string
+	Logger      *slog.Logger
 }
 
 type ChangeListener struct {
 	ctx         context.Context
+	logger      *slog.Logger
 	consumer    messaging.Consumer
 	publisher   messaging.Publisher
 	changeQueue string
 }
 
 func NewChangeListener(ctx context.Context, config ChangeListenerConfig) *ChangeListener {
+	if config.Logger == nil {
+		config.Logger = logger.NewDiscardLogger()
+	}
+
 	return &ChangeListener{
 		ctx:         ctx,
 		consumer:    config.Consumer,
 		publisher:   config.Publisher,
 		changeQueue: config.ChangeQueue,
+		logger:      config.Logger,
 	}
 }
 
@@ -46,8 +54,7 @@ func (l *ChangeListener) Run() error {
 }
 
 func (l *ChangeListener) handleMessage(body []byte, headers messaging.Headers) error {
-
-	log.Println("received change")
+	l.logger.Info("received change")
 
 	host, ok := headers.GetString(messaging.HeaderKeyHost)
 	if !ok {
@@ -73,13 +80,12 @@ func (l *ChangeListener) handleMessage(body []byte, headers messaging.Headers) e
 }
 
 func (l *ChangeListener) AckChange(host string, replyTo string, change *beacondnspb.Change) error {
-
 	headers := messaging.Headers{
 		messaging.HeaderKeyHost: host,
 	}
 
 	ack := &beacondnspb.ChangeAck{
-		ChangeId: change.Id,
+		ChangeId: change.GetId(),
 	}
 
 	body, err := proto.Marshal(ack)

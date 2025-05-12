@@ -16,12 +16,14 @@ const (
 	delegationSetSize = 2
 	hostmasterEmail   = "hostmaster.beacondns.org"
 
-	// SOA record values
 	soaSerial     = 1
 	soaRefresh    = 7200    // 2 hours
 	soaRetry      = 900     // 15 minutes
 	soaExpire     = 1209600 // 2 weeks
 	soaMinimumTTL = 86400   // 1 day
+
+	soaRRTTL = 86400  // 1 day
+	nsRRTTL  = 172800 // 48 hours
 )
 
 type Service interface {
@@ -32,7 +34,11 @@ type Service interface {
 
 	// Resource record management
 	ListResourceRecordSets(ctx context.Context, zoneID uuid.UUID) ([]beacondomain.ResourceRecordSet, error)
-	ChangeResourceRecordSets(ctx context.Context, zoneID uuid.UUID, rrc []beacondomain.ResourceRecordSetChange) (*controllerdomain.ChangeInfo, error)
+	ChangeResourceRecordSets(
+		ctx context.Context,
+		zoneID uuid.UUID,
+		rrc []beacondomain.ResourceRecordSetChange,
+	) (*controllerdomain.ChangeInfo, error)
 }
 
 type DefaultService struct {
@@ -48,6 +54,8 @@ func NewService(r repository.TransactorRegistry) *DefaultService {
 }
 
 func (d *DefaultService) CreateZone(ctx context.Context, name string) (*controllerdomain.CreateZoneResult, error) {
+	var err error
+
 	zoneName := dns.Fqdn(name)
 
 	zone := controllerdomain.Zone{
@@ -59,9 +67,18 @@ func (d *DefaultService) CreateZone(ctx context.Context, name string) (*controll
 
 	primaryNS := nameServerNames[0]
 
-	soa := beacondomain.NewSOA(zoneName, 900, primaryNS, hostmasterEmail, soaSerial, soaRefresh, soaRetry, soaExpire, soaMinimumTTL)
-
-	nsRec := beacondomain.NewNS(zoneName, 172800, nameServerNames)
+	soa := beacondomain.NewSOA(
+		zoneName,
+		soaRRTTL,
+		primaryNS,
+		hostmasterEmail,
+		soaSerial,
+		soaRefresh,
+		soaRetry,
+		soaExpire,
+		soaMinimumTTL,
+	)
+	nsRec := beacondomain.NewNS(zoneName, nsRRTTL, nameServerNames)
 
 	params := repository.CreateZoneParams{
 		Zone: zone,
@@ -69,10 +86,14 @@ func (d *DefaultService) CreateZone(ctx context.Context, name string) (*controll
 		NS:   nsRec,
 	}
 
-	zoneChange := beacondomain.NewZoneChange(zoneName, beacondomain.ZoneChangeActionCreate, []beacondomain.ResourceRecordSetChange{
-		beacondomain.NewResourceRecordSetChange(beacondomain.RRSetChangeActionCreate, soa),
-		beacondomain.NewResourceRecordSetChange(beacondomain.RRSetChangeActionCreate, nsRec),
-	})
+	zoneChange := beacondomain.NewZoneChange(
+		zoneName,
+		beacondomain.ZoneChangeActionCreate,
+		[]beacondomain.ResourceRecordSetChange{
+			beacondomain.NewResourceRecordSetChange(beacondomain.RRSetChangeActionCreate, soa),
+			beacondomain.NewResourceRecordSetChange(beacondomain.RRSetChangeActionCreate, nsRec),
+		},
+	)
 
 	change := beacondomain.NewChangeWithZoneChange(zoneChange)
 
@@ -93,14 +114,15 @@ func (d *DefaultService) CreateZone(ctx context.Context, name string) (*controll
 	changeWithTargets := controllerdomain.NewChangeWithTargets(change, changeTargets)
 
 	createZoneFunc := func(ctx context.Context, r repository.Registry) (any, error) {
-		err := r.GetZoneRepository().CreateZone(ctx, params)
-		if err != nil {
-			return nil, err
+		var createZoneErr error
+		createZoneErr = r.GetZoneRepository().CreateZone(ctx, params)
+		if createZoneErr != nil {
+			return nil, createZoneErr
 		}
 
-		change, err := r.GetChangeRepository().CreateChange(ctx, changeWithTargets)
-		if err != nil {
-			return nil, err
+		change, createZoneErr := r.GetChangeRepository().CreateChange(ctx, changeWithTargets)
+		if createZoneErr != nil {
+			return nil, createZoneErr
 		}
 
 		return change, nil
@@ -126,18 +148,25 @@ func (d *DefaultService) CreateZone(ctx context.Context, name string) (*controll
 	}, nil
 }
 
-func (d *DefaultService) GetZone(ctx context.Context, id uuid.UUID) (*controllerdomain.Zone, error) {
+func (d *DefaultService) GetZone(_ context.Context, _ uuid.UUID) (*controllerdomain.Zone, error) {
 	panic("unimplemented")
 }
 
-func (d *DefaultService) ListZones(ctx context.Context) ([]controllerdomain.Zone, error) {
+func (d *DefaultService) ListZones(_ context.Context) ([]controllerdomain.Zone, error) {
 	panic("unimplemented")
 }
 
-func (d *DefaultService) ChangeResourceRecordSets(ctx context.Context, zoneID uuid.UUID, b []beacondomain.ResourceRecordSetChange) (*controllerdomain.ChangeInfo, error) {
+func (d *DefaultService) ChangeResourceRecordSets(
+	_ context.Context,
+	_ uuid.UUID,
+	_ []beacondomain.ResourceRecordSetChange,
+) (*controllerdomain.ChangeInfo, error) {
 	panic("unimplemented")
 }
 
-func (d *DefaultService) ListResourceRecordSets(ctx context.Context, zoneID uuid.UUID) ([]beacondomain.ResourceRecordSet, error) {
+func (d *DefaultService) ListResourceRecordSets(
+	_ context.Context,
+	_ uuid.UUID,
+) ([]beacondomain.ResourceRecordSet, error) {
 	panic("unimplemented")
 }

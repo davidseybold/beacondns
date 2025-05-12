@@ -54,11 +54,19 @@ const (
 )
 
 type ChangeRepository interface {
-	CreateChange(ctx context.Context, change controllerdomain.ChangeWithTargets) (*controllerdomain.ChangeWithTargets, error)
+	CreateChange(
+		ctx context.Context,
+		change controllerdomain.ChangeWithTargets,
+	) (*controllerdomain.ChangeWithTargets, error)
 	GetChange(ctx context.Context, id uuid.UUID) (*beacondomain.Change, error)
 	GetChangesWithPendingTargets(ctx context.Context) ([]*beacondomain.Change, error)
 	GetPendingTargetsForChange(ctx context.Context, changeID uuid.UUID) ([]controllerdomain.ChangeTarget, error)
-	UpdateChangeTargetStatus(ctx context.Context, changeID uuid.UUID, hostName string, status controllerdomain.ChangeTargetStatus) error
+	UpdateChangeTargetStatus(
+		ctx context.Context,
+		changeID uuid.UUID,
+		hostName string,
+		status controllerdomain.ChangeTargetStatus,
+	) error
 }
 
 type PostgresChangeRepository struct {
@@ -67,7 +75,10 @@ type PostgresChangeRepository struct {
 
 var _ ChangeRepository = (*PostgresChangeRepository)(nil)
 
-func (r *PostgresChangeRepository) CreateChange(ctx context.Context, change controllerdomain.ChangeWithTargets) (*controllerdomain.ChangeWithTargets, error) {
+func (r *PostgresChangeRepository) CreateChange(
+	ctx context.Context,
+	change controllerdomain.ChangeWithTargets,
+) (*controllerdomain.ChangeWithTargets, error) {
 	var changeData any
 	switch change.Type {
 	case beacondomain.ChangeTypeZone:
@@ -121,17 +132,27 @@ func (r *PostgresChangeRepository) GetChange(ctx context.Context, id uuid.UUID) 
 	return &change, nil
 }
 
-func (r *PostgresChangeRepository) createChangeTargets(ctx context.Context, changeID uuid.UUID, targets []controllerdomain.ChangeTarget) error {
+func (r *PostgresChangeRepository) createChangeTargets(
+	ctx context.Context,
+	changeID uuid.UUID,
+	targets []controllerdomain.ChangeTarget,
+) error {
 	for _, target := range targets {
 		_, err := r.db.Exec(ctx, insertChangeTargetQuery, changeID, target.Server.ID)
 		if err != nil {
-			return fmt.Errorf("failed to create change target for change %s and hostname %s: %w", changeID, target.Server.HostName, err)
+			return fmt.Errorf(
+				"failed to create change target for change %s and hostname %s: %w",
+				changeID,
+				target.Server.HostName,
+				err,
+			)
 		}
 	}
 	return nil
 }
 
 func (r *PostgresChangeRepository) GetChangesWithPendingTargets(ctx context.Context) ([]*beacondomain.Change, error) {
+	var err error
 	rows, err := r.db.Query(ctx, getChangesWithPendingTargetsQuery)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query changes with pending targets: %w", err)
@@ -142,7 +163,7 @@ func (r *PostgresChangeRepository) GetChangesWithPendingTargets(ctx context.Cont
 	for rows.Next() {
 		var change beacondomain.Change
 		var changeData []byte
-		err := rows.Scan(&change.ID, &change.Type, &changeData, &change.SubmittedAt)
+		err = rows.Scan(&change.ID, &change.Type, &changeData, &change.SubmittedAt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan change row: %w", err)
 		}
@@ -162,14 +183,18 @@ func (r *PostgresChangeRepository) GetChangesWithPendingTargets(ctx context.Cont
 		changes = append(changes, &change)
 	}
 
-	if err := rows.Err(); err != nil {
+	if err = rows.Err(); err != nil {
 		return nil, fmt.Errorf("error iterating change rows: %w", err)
 	}
 
 	return changes, nil
 }
 
-func (r *PostgresChangeRepository) GetPendingTargetsForChange(ctx context.Context, changeID uuid.UUID) ([]controllerdomain.ChangeTarget, error) {
+func (r *PostgresChangeRepository) GetPendingTargetsForChange(
+	ctx context.Context,
+	changeID uuid.UUID,
+) ([]controllerdomain.ChangeTarget, error) {
+	var err error
 	rows, err := r.db.Query(ctx, getPendingTargetsForChangeQuery, changeID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query pending targets for change %s: %w", changeID, err)
@@ -179,7 +204,7 @@ func (r *PostgresChangeRepository) GetPendingTargetsForChange(ctx context.Contex
 	var targets []controllerdomain.ChangeTarget
 	for rows.Next() {
 		var target controllerdomain.ChangeTarget
-		err := rows.Scan(&target.Status,
+		err = rows.Scan(&target.Status,
 			&target.SyncedAt,
 			&target.Server.ID,
 			&target.Server.Type,
@@ -191,7 +216,7 @@ func (r *PostgresChangeRepository) GetPendingTargetsForChange(ctx context.Contex
 		targets = append(targets, target)
 	}
 
-	if err := rows.Err(); err != nil {
+	if err = rows.Err(); err != nil {
 		return nil, fmt.Errorf("error iterating target rows: %w", err)
 	}
 
@@ -206,7 +231,12 @@ func (r *PostgresChangeRepository) UpdateChangeTargetStatus(
 ) error {
 	_, err := r.db.Exec(ctx, updateChangeTargetStatusQuery, changeID, hostname, status)
 	if err != nil {
-		return fmt.Errorf("failed to update change target status for change %s and hostname %s: %w", changeID, hostname, err)
+		return fmt.Errorf(
+			"failed to update change target status for change %s and hostname %s: %w",
+			changeID,
+			hostname,
+			err,
+		)
 	}
 	return nil
 }

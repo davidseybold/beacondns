@@ -16,13 +16,9 @@ func NewConnectionPool(ctx context.Context, config Config) (*pgxpool.Pool, error
 		return nil, err
 	}
 
-	poolConfig.BeforeConnect = func(c context.Context, cfg *pgx.ConnConfig) error {
+	poolConfig.BeforeConnect = func(_ context.Context, cfg *pgx.ConnConfig) error {
 		cfg.Password = config.Password
 
-		return nil
-	}
-
-	poolConfig.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
 		return nil
 	}
 

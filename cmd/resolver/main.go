@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"strings"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/oklog/run"
 	amqp "github.com/rabbitmq/amqp091-go"
 
+	"github.com/davidseybold/beacondns/internal/libs/logger"
 	"github.com/davidseybold/beacondns/internal/libs/messaging"
 	"github.com/davidseybold/beacondns/internal/resolver"
 )
@@ -37,7 +39,10 @@ func main() {
 	}
 }
 
-func start(ctx context.Context, out io.Writer) error {
+func start(ctx context.Context, _ io.Writer) error {
+
+	logger := logger.NewJSONLogger(slog.LevelInfo, os.Stdout)
+
 	cfg, err := loadConfig()
 	if err != nil {
 		return err
@@ -84,13 +89,14 @@ func start(ctx context.Context, out io.Writer) error {
 		Consumer:    consumer,
 		Publisher:   publisher,
 		ChangeQueue: queueName,
+		Logger:      logger,
 	})
 
 	var g run.Group
 	{
 		g.Add(func() error {
 			return changeListener.Run()
-		}, func(err error) {
+		}, func(_ error) {
 			clCancel()
 		})
 	}

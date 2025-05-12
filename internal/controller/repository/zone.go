@@ -33,7 +33,6 @@ type CreateZoneParams struct {
 }
 
 func (p *PostgresZoneRepository) CreateZone(ctx context.Context, params CreateZoneParams) error {
-
 	if _, err := p.db.Exec(ctx, insertZoneQuery, params.Zone.ID, params.Zone.Name); err != nil {
 		return fmt.Errorf("failed to create zone %s: %w", params.Zone.Name, err)
 	}
@@ -45,19 +44,36 @@ func (p *PostgresZoneRepository) CreateZone(ctx context.Context, params CreateZo
 	return nil
 }
 
-func (p *PostgresZoneRepository) insertResourceRecordSets(ctx context.Context, zoneID uuid.UUID, recordSets []beacondomain.ResourceRecordSet) error {
+func (p *PostgresZoneRepository) insertResourceRecordSets(
+	ctx context.Context,
+	zoneID uuid.UUID,
+	recordSets []beacondomain.ResourceRecordSet,
+) error {
+	var err error
 	for _, recordSet := range recordSets {
 		row := p.db.QueryRow(ctx, insertResourceRecordSetQuery, zoneID, recordSet.Name, recordSet.Type, recordSet.TTL)
 
 		var id int
-		err := row.Scan(&id)
+		err = row.Scan(&id)
 		if err != nil {
-			return fmt.Errorf("failed to create resource record set %s of type %s for zone %s: %w", recordSet.Name, recordSet.Type, zoneID, err)
+			return fmt.Errorf(
+				"failed to create resource record set %s of type %s for zone %s: %w",
+				recordSet.Name,
+				recordSet.Type,
+				zoneID,
+				err,
+			)
 		}
 
 		for _, rr := range recordSet.ResourceRecords {
-			if _, err := p.db.Exec(ctx, insertResourceRecordQuery, id, rr.Value); err != nil {
-				return fmt.Errorf("failed to create resource record with value %s for record set %d: %w", rr.Value, id, err)
+			_, err = p.db.Exec(ctx, insertResourceRecordQuery, id, rr.Value)
+			if err != nil {
+				return fmt.Errorf(
+					"failed to create resource record with value %s for record set %d: %w",
+					rr.Value,
+					id,
+					err,
+				)
 			}
 		}
 	}

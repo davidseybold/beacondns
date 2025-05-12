@@ -30,7 +30,7 @@ BUF_FORMAT := buf format
 install-tools:
 ifndef GOLANGCI_LINT
 	@echo ">> Installing golangci-lint..."
-	@go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+	brew install golangci-lint
 endif
 	@echo ">> Installing Buf..."
 	@brew install bufbuild/buf/buf || true # Try to install Buf via brew
@@ -83,7 +83,7 @@ lint:
 
 fmt:
 	@echo ">> Formatting..."
-	$(GO) fmt ./...
+	golangci-lint fmt
 
 clean:
 	@echo ">> Cleaning binaries..."

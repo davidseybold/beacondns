@@ -47,7 +47,7 @@ const (
 type ResourceRecordSet struct {
 	Name            string           `json:"name"`
 	Type            RRType           `json:"type"`
-	TTL             uint             `json:"ttl"`
+	TTL             uint32           `json:"ttl"`
 	ResourceRecords []ResourceRecord `json:"resourceRecords"`
 }
 
@@ -74,21 +74,39 @@ type Change struct {
 	SubmittedAt *time.Time  `json:"submittedAt,omitempty"`
 }
 
-func NewSOA(zoneName string, ttl uint, primaryNS string, hostmasterEmail string, soaSerial uint, soaRefresh uint, soaRetry uint, soaExpire uint, soaMinimum uint) ResourceRecordSet {
+func NewSOA(
+	zoneName string,
+	ttl uint32,
+	primaryNS string,
+	hostmasterEmail string,
+	soaSerial uint,
+	soaRefresh uint,
+	soaRetry uint,
+	soaExpire uint,
+	soaMinimum uint,
+) ResourceRecordSet {
 	return ResourceRecordSet{
 		Name: zoneName,
 		Type: RRTypeSOA,
 		TTL:  ttl,
 		ResourceRecords: []ResourceRecord{
 			{
-				Value: fmt.Sprintf("%s %s %d %d %d %d %d", primaryNS, hostmasterEmail, soaSerial, soaRefresh, soaRetry, soaExpire, soaMinimum),
+				Value: fmt.Sprintf(
+					"%s %s %d %d %d %d %d",
+					primaryNS,
+					hostmasterEmail,
+					soaSerial,
+					soaRefresh,
+					soaRetry,
+					soaExpire,
+					soaMinimum,
+				),
 			},
 		},
 	}
-
 }
 
-func NewNS(zoneName string, ttl uint, nameServerNames []string) ResourceRecordSet {
+func NewNS(zoneName string, ttl uint32, nameServerNames []string) ResourceRecordSet {
 	resourceRecords := make([]ResourceRecord, len(nameServerNames))
 	for i, nameServer := range nameServerNames {
 		resourceRecords[i] = ResourceRecord{

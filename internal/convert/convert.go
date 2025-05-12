@@ -11,8 +11,7 @@ func DomainChangeToProto(domain *beacondomain.Change) *beacondnspb.Change {
 		Type: DomainChangeTypeToProto(domain.Type),
 	}
 
-	switch domain.Type {
-	case beacondomain.ChangeTypeZone:
+	if domain.Type == beacondomain.ChangeTypeZone {
 		change.ZoneChange = DomainZoneChangeToProto(domain.ZoneChange)
 	}
 
@@ -54,7 +53,9 @@ func DomainZoneChangeActionToProto(action beacondomain.ZoneChangeAction) beacond
 	}
 }
 
-func DomainResourceRecordSetChangeToProto(change *beacondomain.ResourceRecordSetChange) *beacondnspb.ResourceRecordSetChange {
+func DomainResourceRecordSetChangeToProto(
+	change *beacondomain.ResourceRecordSetChange,
+) *beacondnspb.ResourceRecordSetChange {
 	return &beacondnspb.ResourceRecordSetChange{
 		Action:            DomainResourceRecordSetChangeActionToProto(change.Action),
 		ResourceRecordSet: DomainResourceRecordSetToProto(&change.ResourceRecordSet),
@@ -83,7 +84,7 @@ func DomainResourceRecordSetToProto(rrset *beacondomain.ResourceRecordSet) *beac
 	return &beacondnspb.ResourceRecordSet{
 		Name:            rrset.Name,
 		Type:            DomainRRTypeToProto(rrset.Type),
-		Ttl:             uint32(rrset.TTL),
+		Ttl:             rrset.TTL,
 		ResourceRecords: resourceRecords,
 	}
 }
@@ -118,6 +119,12 @@ func DomainRRTypeToProto(rrType beacondomain.RRType) beacondnspb.RRType {
 		return beacondnspb.RRType_RR_TYPE_DS
 	case beacondomain.RRTypeNSEC:
 		return beacondnspb.RRType_RR_TYPE_NSEC
+	case beacondomain.RRTypeDNSKEY:
+		return beacondnspb.RRType_RR_TYPE_DNSKEY
+	case beacondomain.RRTypeRRSIG:
+		return beacondnspb.RRType_RR_TYPE_RRSIG
+	case beacondomain.RRTypeTLSA:
+		return beacondnspb.RRType_RR_TYPE_TLSA
 	default:
 		return beacondnspb.RRType_RR_TYPE_UNSPECIFIED
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/google/uuid"
@@ -32,40 +33,43 @@ type Config struct {
 
 	// Consumer is used to receive acknowledgments
 	Consumer messaging.Consumer
+
+	// Logger is used to log messages
+	Logger *slog.Logger
 }
 
-// Validate checks if the config is valid
 func (c *Config) Validate() error {
 	if c.PollInterval <= 0 {
-		return fmt.Errorf("poll interval must be positive")
+		return errors.New("poll interval must be positive")
 	}
 	if c.AcknowledgmentQueue == "" {
-		return fmt.Errorf("acknowledgment queue name is required")
+		return errors.New("acknowledgment queue name is required")
 	}
 	if c.Registry == nil {
-		return fmt.Errorf("registry is required")
+		return errors.New("registry is required")
 	}
 	if c.Publisher == nil {
-		return fmt.Errorf("publisher is required")
+		return errors.New("publisher is required")
 	}
 	if c.Consumer == nil {
-		return fmt.Errorf("consumer is required")
+		return errors.New("consumer is required")
+	}
+	if c.Logger == nil {
+		return errors.New("logger is required")
 	}
 	return nil
 }
 
-// Syncer is responsible for syncing changes to servers and handling acknowledgments
 type Syncer struct {
-	ctx       context.Context
-	registry  repository.Registry
-	publisher messaging.Publisher
-	consumer  messaging.Consumer
-
+	ctx                 context.Context
+	registry            repository.Registry
+	publisher           messaging.Publisher
+	consumer            messaging.Consumer
+	logger              *slog.Logger
 	pollInterval        time.Duration
 	acknowledgmentQueue string
 }
 
-// New creates a new syncer
 func New(ctx context.Context, config Config) (*Syncer, error) {
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
@@ -76,17 +80,15 @@ func New(ctx context.Context, config Config) (*Syncer, error) {
 		registry:            config.Registry,
 		publisher:           config.Publisher,
 		consumer:            config.Consumer,
+		logger:              config.Logger,
 		pollInterval:        config.PollInterval,
 		acknowledgmentQueue: config.AcknowledgmentQueue,
 	}, nil
 }
 
-// Start begins the syncer's work
 func (s *Syncer) Start() error {
-	// Start the change poller
 	go s.startChangePoller(s.ctx)
 
-	// Start the acknowledgment listener
 	if err := s.consumer.Consume(s.ctx, s.acknowledgmentQueue, s.handleAcknowledgment); err != nil {
 		return fmt.Errorf("failed to start consumer: %w", err)
 	}
@@ -96,7 +98,6 @@ func (s *Syncer) Start() error {
 	return s.ctx.Err()
 }
 
-// startChangePoller periodically checks for pending changes
 func (s *Syncer) startChangePoller(ctx context.Context) {
 	ticker := time.NewTicker(s.pollInterval)
 	defer ticker.Stop()
@@ -107,44 +108,55 @@ func (s *Syncer) startChangePoller(ctx context.Context) {
 			return
 		case <-ticker.C:
 			if err := s.processPendingChanges(ctx); err != nil {
-				fmt.Printf("Error processing pending changes: %v\n", err)
+				s.logger.ErrorContext(ctx, "Error processing pending changes", "error", err)
 			}
 		}
 	}
 }
 
 func (s *Syncer) processPendingChanges(ctx context.Context) error {
+	var err error
 	changes, err := s.registry.GetChangeRepository().GetChangesWithPendingTargets(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get pending changes: %w", err)
 	}
 
 	for _, change := range changes {
-		if err := s.processChange(ctx, change); err != nil {
-			fmt.Printf("Error processing change %s: %v\n", change.ID, err)
+		if err = s.processChange(ctx, change); err != nil {
+			s.logger.ErrorContext(ctx, "Error processing change", "error", err, "change_id", change.ID)
 		}
 	}
 
 	return nil
 }
 
-// processChange handles a single change and its targets
 func (s *Syncer) processChange(ctx context.Context, change *beacondomain.Change) error {
+	var err error
 	targets, err := s.registry.GetChangeRepository().GetPendingTargetsForChange(ctx, change.ID)
 	if err != nil {
 		return fmt.Errorf("failed to get pending targets for change %s: %w", change.ID, err)
 	}
 
 	for _, target := range targets {
-		if err := s.sendChangeToTarget(ctx, change, target); err != nil {
-			fmt.Printf("Error sending change %s to target %s: %v\n", change.ID, target.Server.HostName, err)
+		if err = s.sendChangeToTarget(ctx, change, target); err != nil {
+			s.logger.ErrorContext(
+				ctx,
+				"Error sending change",
+				"error", err,
+				"change_id", change.ID,
+				"target", target.Server.HostName,
+			)
 		}
 	}
 
 	return nil
 }
 
-func (s *Syncer) sendChangeToTarget(ctx context.Context, change *beacondomain.Change, target controllerdomain.ChangeTarget) error {
+func (s *Syncer) sendChangeToTarget(
+	ctx context.Context,
+	change *beacondomain.Change,
+	target controllerdomain.ChangeTarget,
+) error {
 	headers := messaging.Headers{
 		messaging.HeaderKeyHost:    target.Server.HostName,
 		messaging.HeaderKeyReplyTo: s.acknowledgmentQueue,
@@ -192,12 +204,11 @@ func (s *Syncer) handleAcknowledgment(body []byte, headers messaging.Headers) er
 		return messaging.NewConsumerError(errors.New("host header not found"), false)
 	}
 
-	changeID, err := uuid.Parse(ackMsg.ChangeId)
+	changeID, err := uuid.Parse(ackMsg.GetChangeId())
 	if err != nil {
 		return messaging.NewConsumerError(fmt.Errorf("failed to parse change_id: %w", err), false)
 	}
 
-	// Update the target status to INSYNC
 	err = s.registry.GetChangeRepository().UpdateChangeTargetStatus(
 		context.Background(),
 		changeID,
