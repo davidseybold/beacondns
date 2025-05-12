@@ -11,6 +11,7 @@ import (
 type ChangeStatus string
 type ChangeTargetStatus string
 type ChangeType string
+type ServerType string
 
 const (
 	ChangeStatusPending ChangeStatus = "PENDING"
@@ -21,6 +22,8 @@ const (
 	ChangeTargetStatusInSync  ChangeTargetStatus = "INSYNC"
 
 	ChangeTypeZone ChangeType = "ZONE"
+
+	ServerTypeResolver ServerType = "resolver"
 )
 
 type CreateZoneResult struct {
@@ -45,10 +48,15 @@ type ChangeWithTargets struct {
 	Targets []ChangeTarget `json:"targets"`
 }
 
+func NewChangeWithTargets(change beacondomain.Change, targets []ChangeTarget) ChangeWithTargets {
+	return ChangeWithTargets{
+		Change:  change,
+		Targets: targets,
+	}
+}
+
 type ChangeTarget struct {
-	ID       uuid.UUID          `json:"id"`
-	ChangeID uuid.UUID          `json:"changeId"`
-	ServerID uuid.UUID          `json:"serverId"`
+	Server   Server             `json:"server"`
 	Status   ChangeTargetStatus `json:"status"`
 	SyncedAt *time.Time         `json:"syncedAt,omitempty"`
 }
@@ -60,6 +68,7 @@ type ChangeInfo struct {
 }
 
 type Server struct {
-	ID   uuid.UUID `json:"id"`
-	Name string    `json:"name"`
+	ID       uuid.UUID  `json:"id"`
+	Type     ServerType `json:"type"`
+	HostName string     `json:"hostName"`
 }

@@ -1,7 +1,8 @@
 CREATE TABLE
     servers (
         id UUID PRIMARY KEY,
-        name VARCHAR(255) NOT NULL UNIQUE,
+        type TEXT NOT NULL CHECK (type IN ('resolver')),
+        hostname VARCHAR(255) NOT NULL UNIQUE,
         created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
     );
 
@@ -39,12 +40,12 @@ CREATE TABLE
 
 CREATE TABLE
     change_targets (
-        id UUID PRIMARY KEY,
         change_id UUID NOT NULL,
         server_id UUID NOT NULL,
         status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'SENT', 'INSYNC')),
         updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
         synced_at TIMESTAMPTZ,
+        PRIMARY KEY (change_id, server_id),
         FOREIGN KEY (change_id) REFERENCES changes (id) ON DELETE CASCADE,
         FOREIGN KEY (server_id) REFERENCES servers (id) ON DELETE CASCADE
     );

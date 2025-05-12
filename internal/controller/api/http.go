@@ -3,12 +3,13 @@ package api
 import (
 	"net/http"
 
-	"github.com/davidseybold/beacondns/internal/controller/usecase"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+
+	"github.com/davidseybold/beacondns/internal/controller/zone"
 )
 
-func NewHTTPHandler(zoneService usecase.ZoneService) http.Handler {
+func NewHTTPHandler(zoneService zone.Service) http.Handler {
 	r := gin.Default()
 
 	handler := &handler{
@@ -25,7 +26,7 @@ func NewHTTPHandler(zoneService usecase.ZoneService) http.Handler {
 }
 
 type handler struct {
-	zoneService usecase.ZoneService
+	zoneService zone.Service
 }
 
 func (h *handler) Health(c *gin.Context) {

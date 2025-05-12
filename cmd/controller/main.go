@@ -12,11 +12,19 @@ import (
 	"github.com/caarlos0/env/v11"
 	"github.com/joho/godotenv"
 	"github.com/oklog/run"
+	amqp "github.com/rabbitmq/amqp091-go"
 
 	"github.com/davidseybold/beacondns/internal/controller/api"
 	"github.com/davidseybold/beacondns/internal/controller/repository"
-	"github.com/davidseybold/beacondns/internal/controller/usecase"
+	"github.com/davidseybold/beacondns/internal/controller/syncer"
+	"github.com/davidseybold/beacondns/internal/controller/zone"
 	"github.com/davidseybold/beacondns/internal/libs/db/postgres"
+	"github.com/davidseybold/beacondns/internal/libs/messaging"
+)
+
+const (
+	exchangeName        = "beacon"
+	acknowledgmentQueue = "controller.change.ack"
 )
 
 type serviceConfig struct {
@@ -88,9 +96,52 @@ func start(ctx context.Context, w io.Writer) error {
 	}
 	defer db.Close()
 
-	repoRegistry := repository.NewPostgresRepositoryRegistry(db)
+	publishConn, err := amqp.Dial(cfg.RabbitHost)
+	if err != nil {
+		return fmt.Errorf("error creating RabbitMQ connection: %w", err)
+	}
+	defer publishConn.Close()
 
-	zoneService := usecase.NewZoneService(repoRegistry)
+	publisher, err := messaging.NewRabbitMQPublisher(publishConn, "beacon")
+	if err != nil {
+		return fmt.Errorf("error creating RabbitMQ publisher: %w", err)
+	}
+	defer publisher.Close()
+
+	consumeConn, err := amqp.Dial(cfg.RabbitHost)
+	if err != nil {
+		return fmt.Errorf("error creating RabbitMQ connection: %w", err)
+	}
+	defer consumeConn.Close()
+
+	consumer := messaging.NewRabbitMQConsumer("controller", consumeConn)
+
+	err = messaging.SetupRabbitMQTopology(consumeConn, messaging.RabbitMQTopology{
+		Exchange: messaging.RabbitMQExchange{
+			Name: exchangeName,
+			Kind: "topic",
+		},
+		Queues: []string{acknowledgmentQueue},
+	})
+	if err != nil {
+		return fmt.Errorf("error setting up RabbitMQ topology: %w", err)
+	}
+
+	repoRegistry := repository.NewPostgresRepositoryRegistry(db)
+	zoneService := zone.NewService(repoRegistry)
+
+	syncerCtx, syncerCancel := context.WithCancel(ctx)
+	syncer, err := syncer.New(syncerCtx, syncer.Config{
+		Registry:            repoRegistry,
+		Publisher:           publisher,
+		Consumer:            consumer,
+		PollInterval:        time.Second * 10,
+		AcknowledgmentQueue: acknowledgmentQueue,
+	})
+	if err != nil {
+		syncerCancel()
+		return fmt.Errorf("error creating syncer: %w", err)
+	}
 
 	var g run.Group
 	{
@@ -113,6 +164,13 @@ func start(ctx context.Context, w io.Writer) error {
 				}
 			},
 		)
+	}
+	{
+		g.Add(func() error {
+			return syncer.Start()
+		}, func(err error) {
+			syncerCancel()
+		})
 	}
 
 	g.Add(run.SignalHandler(ctx, os.Interrupt))

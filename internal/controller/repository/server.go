@@ -6,29 +6,30 @@ import (
 
 	"github.com/davidseybold/beacondns/internal/controller/domain"
 	"github.com/davidseybold/beacondns/internal/libs/db/postgres"
+	"github.com/jackc/pgx/v5"
 )
 
 const (
 	insertServerQuery = `
-		INSERT INTO servers (id, name)
-		VALUES ($1, $2)
+		INSERT INTO servers (id, type, hostname)
+		VALUES ($1, $2, $3)
 	`
 
-	getServerByNameQuery = `
-		SELECT id, name
+	getServerByHostNameQuery = `
+		SELECT id, type, hostname
 		FROM servers
-		WHERE name = $1
+		WHERE hostname = $1
 	`
 
 	getAllServersQuery = `
-		SELECT id, name
+		SELECT id, type, hostname
 		FROM servers
 	`
 )
 
 type ServerRepository interface {
 	CreateServer(ctx context.Context, server *domain.Server) error
-	GetServerByName(ctx context.Context, name string) (*domain.Server, error)
+	GetServerByHostName(ctx context.Context, hostName string) (*domain.Server, error)
 	GetAllServers(ctx context.Context) ([]*domain.Server, error)
 }
 
@@ -37,20 +38,20 @@ type PostgresServerRepository struct {
 }
 
 func (r *PostgresServerRepository) CreateServer(ctx context.Context, server *domain.Server) error {
-	_, err := r.db.Exec(ctx, insertServerQuery, server.ID, server.Name)
+	_, err := r.db.Exec(ctx, insertServerQuery, server.ID, server.HostName)
 	if err != nil {
-		return fmt.Errorf("failed to create server %s: %w", server.Name, err)
+		return fmt.Errorf("failed to create server %s: %w", server.HostName, err)
 	}
 	return nil
 }
 
-func (r *PostgresServerRepository) GetServerByName(ctx context.Context, name string) (*domain.Server, error) {
-	var server domain.Server
-	err := r.db.QueryRow(ctx, getServerByNameQuery, name).Scan(&server.ID, &server.Name)
+func (r *PostgresServerRepository) GetServerByHostName(ctx context.Context, hostName string) (*domain.Server, error) {
+	rows := r.db.QueryRow(ctx, getServerByHostNameQuery, hostName)
+	server, err := scanServer(rows)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get server by name %s: %w", name, err)
+		return nil, fmt.Errorf("failed to get server by host name %s: %w", hostName, err)
 	}
-	return &server, nil
+	return server, nil
 }
 
 func (r *PostgresServerRepository) GetAllServers(ctx context.Context) ([]*domain.Server, error) {
@@ -62,15 +63,23 @@ func (r *PostgresServerRepository) GetAllServers(ctx context.Context) ([]*domain
 
 	servers := make([]*domain.Server, 0)
 	for rows.Next() {
-		var server domain.Server
-		err := rows.Scan(&server.ID, &server.Name)
+		server, err := scanServer(rows)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan server row: %w", err)
 		}
-		servers = append(servers, &server)
+		servers = append(servers, server)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("error iterating server rows: %w", err)
 	}
 	return servers, nil
+}
+
+func scanServer(rows pgx.Row) (*domain.Server, error) {
+	var server domain.Server
+	err := rows.Scan(&server.ID, &server.Type, &server.HostName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to scan server row: %w", err)
+	}
+	return &server, nil
 }

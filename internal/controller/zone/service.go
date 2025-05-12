@@ -1,4 +1,4 @@
-package usecase
+package zone
 
 import (
 	"context"
@@ -24,7 +24,7 @@ const (
 	soaMinimumTTL = 86400   // 1 day
 )
 
-type ZoneService interface {
+type Service interface {
 	// Zone management
 	CreateZone(ctx context.Context, name string) (*controllerdomain.CreateZoneResult, error)
 	GetZone(ctx context.Context, id uuid.UUID) (*controllerdomain.Zone, error)
@@ -35,19 +35,19 @@ type ZoneService interface {
 	ChangeResourceRecordSets(ctx context.Context, zoneID uuid.UUID, rrc []beacondomain.ResourceRecordSetChange) (*controllerdomain.ChangeInfo, error)
 }
 
-type DefaultZoneService struct {
+type DefaultService struct {
 	registry repository.TransactorRegistry
 }
 
-var _ ZoneService = (*DefaultZoneService)(nil)
+var _ Service = (*DefaultService)(nil)
 
-func NewZoneService(r repository.TransactorRegistry) *DefaultZoneService {
-	return &DefaultZoneService{
+func NewService(r repository.TransactorRegistry) *DefaultService {
+	return &DefaultService{
 		registry: r,
 	}
 }
 
-func (d *DefaultZoneService) CreateZone(ctx context.Context, name string) (*controllerdomain.CreateZoneResult, error) {
+func (d *DefaultService) CreateZone(ctx context.Context, name string) (*controllerdomain.CreateZoneResult, error) {
 	zoneName := dns.Fqdn(name)
 
 	zone := controllerdomain.Zone{
@@ -85,12 +85,12 @@ func (d *DefaultZoneService) CreateZone(ctx context.Context, name string) (*cont
 
 	for i, server := range targetServers {
 		changeTargets[i] = controllerdomain.ChangeTarget{
-			ID:       uuid.New(),
-			ChangeID: change.ID,
-			ServerID: server.ID,
-			Status:   controllerdomain.ChangeTargetStatusPending,
+			Server: *server,
+			Status: controllerdomain.ChangeTargetStatusPending,
 		}
 	}
+
+	changeWithTargets := controllerdomain.NewChangeWithTargets(change, changeTargets)
 
 	createZoneFunc := func(ctx context.Context, r repository.Registry) (any, error) {
 		err := r.GetZoneRepository().CreateZone(ctx, params)
@@ -98,12 +98,7 @@ func (d *DefaultZoneService) CreateZone(ctx context.Context, name string) (*cont
 			return nil, err
 		}
 
-		change, err := r.GetChangeRepository().CreateChange(ctx, change)
-		if err != nil {
-			return nil, err
-		}
-
-		err = r.GetChangeRepository().CreateChangeTargets(ctx, changeTargets)
+		change, err := r.GetChangeRepository().CreateChange(ctx, changeWithTargets)
 		if err != nil {
 			return nil, err
 		}
@@ -116,7 +111,7 @@ func (d *DefaultZoneService) CreateZone(ctx context.Context, name string) (*cont
 		return nil, fmt.Errorf("failed to create zone: %w", err)
 	}
 
-	chResult, ok := rawResult.(*beacondomain.Change)
+	chResult, ok := rawResult.(*controllerdomain.ChangeWithTargets)
 	if !ok {
 		return nil, fmt.Errorf("unexpected result type: %T", rawResult)
 	}
@@ -131,18 +126,18 @@ func (d *DefaultZoneService) CreateZone(ctx context.Context, name string) (*cont
 	}, nil
 }
 
-func (d *DefaultZoneService) GetZone(ctx context.Context, id uuid.UUID) (*controllerdomain.Zone, error) {
+func (d *DefaultService) GetZone(ctx context.Context, id uuid.UUID) (*controllerdomain.Zone, error) {
 	panic("unimplemented")
 }
 
-func (d *DefaultZoneService) ListZones(ctx context.Context) ([]controllerdomain.Zone, error) {
+func (d *DefaultService) ListZones(ctx context.Context) ([]controllerdomain.Zone, error) {
 	panic("unimplemented")
 }
 
-func (d *DefaultZoneService) ChangeResourceRecordSets(ctx context.Context, zoneID uuid.UUID, b []beacondomain.ResourceRecordSetChange) (*controllerdomain.ChangeInfo, error) {
+func (d *DefaultService) ChangeResourceRecordSets(ctx context.Context, zoneID uuid.UUID, b []beacondomain.ResourceRecordSetChange) (*controllerdomain.ChangeInfo, error) {
 	panic("unimplemented")
 }
 
-func (d *DefaultZoneService) ListResourceRecordSets(ctx context.Context, zoneID uuid.UUID) ([]beacondomain.ResourceRecordSet, error) {
+func (d *DefaultService) ListResourceRecordSets(ctx context.Context, zoneID uuid.UUID) ([]beacondomain.ResourceRecordSet, error) {
 	panic("unimplemented")
 }
