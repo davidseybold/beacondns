@@ -4,9 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/davidseybold/beacondns/internal/libs/db/postgres"
 	"github.com/jackc/pgx/v5"
 	"github.com/pkg/errors"
+
+	"github.com/davidseybold/beacondns/internal/libs/db/postgres"
 )
 
 // Inspired by this article: https://zenidas.wordpress.com/recipes/repository-pattern-and-transaction-management-in-golang/

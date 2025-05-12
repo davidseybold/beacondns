@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/google/uuid"
+
 	controllerdomain "github.com/davidseybold/beacondns/internal/controller/domain"
-	"github.com/davidseybold/beacondns/internal/domain"
 	beacondomain "github.com/davidseybold/beacondns/internal/domain"
 	"github.com/davidseybold/beacondns/internal/libs/db/postgres"
-	"github.com/google/uuid"
 )
 
 const (
@@ -38,14 +38,14 @@ func (p *PostgresZoneRepository) CreateZone(ctx context.Context, params CreateZo
 		return fmt.Errorf("failed to create zone %s: %w", params.Zone.Name, err)
 	}
 
-	if err := p.insertResourceRecordSets(ctx, params.Zone.ID, []domain.ResourceRecordSet{params.SOA, params.NS}); err != nil {
+	if err := p.insertResourceRecordSets(ctx, params.Zone.ID, []beacondomain.ResourceRecordSet{params.SOA, params.NS}); err != nil {
 		return fmt.Errorf("failed to create initial resource record sets for zone %s: %w", params.Zone.Name, err)
 	}
 
 	return nil
 }
 
-func (p *PostgresZoneRepository) insertResourceRecordSets(ctx context.Context, zoneID uuid.UUID, recordSets []domain.ResourceRecordSet) error {
+func (p *PostgresZoneRepository) insertResourceRecordSets(ctx context.Context, zoneID uuid.UUID, recordSets []beacondomain.ResourceRecordSet) error {
 	for _, recordSet := range recordSets {
 		row := p.db.QueryRow(ctx, insertResourceRecordSetQuery, zoneID, recordSet.Name, recordSet.Type, recordSet.TTL)
 

@@ -4,9 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/davidseybold/beacondns/internal/controller/domain"
 	"github.com/davidseybold/beacondns/internal/libs/db/postgres"
-	"github.com/jackc/pgx/v5"
 )
 
 const (

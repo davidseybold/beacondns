@@ -6,9 +6,10 @@ import (
 	"fmt"
 	"log"
 
+	"google.golang.org/protobuf/proto"
+
 	beacondnspb "github.com/davidseybold/beacondns/internal/libs/gen/proto/beacondns/v1"
 	"github.com/davidseybold/beacondns/internal/libs/messaging"
-	"google.golang.org/protobuf/proto"
 )
 
 type ChangeListenerConfig struct {

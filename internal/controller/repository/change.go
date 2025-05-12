@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/google/uuid"
+
 	controllerdomain "github.com/davidseybold/beacondns/internal/controller/domain"
 	beacondomain "github.com/davidseybold/beacondns/internal/domain"
 	"github.com/davidseybold/beacondns/internal/libs/db/postgres"
-	"github.com/google/uuid"
 )
 
 const (
