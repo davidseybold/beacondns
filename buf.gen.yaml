@@ -1,8 +1,8 @@
 version: v2
 plugins:
   - local: protoc-gen-go
-    out: internal/libs/gen/proto
+    out: internal/gen/proto
     opt: paths=source_relative
   - local: protoc-gen-go-grpc
-    out: internal/libs/gen/proto
+    out: internal/gen/proto
     opt: paths=source_relative

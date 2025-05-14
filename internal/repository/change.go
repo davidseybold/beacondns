@@ -7,9 +7,8 @@ import (
 
 	"github.com/google/uuid"
 
-	controllerdomain "github.com/davidseybold/beacondns/internal/controller/domain"
-	beacondomain "github.com/davidseybold/beacondns/internal/domain"
-	"github.com/davidseybold/beacondns/internal/libs/db/postgres"
+	"github.com/davidseybold/beacondns/internal/db/postgres"
+	"github.com/davidseybold/beacondns/internal/model"
 )
 
 const (
@@ -56,16 +55,16 @@ const (
 type ChangeRepository interface {
 	CreateChange(
 		ctx context.Context,
-		change controllerdomain.ChangeWithTargets,
-	) (*controllerdomain.ChangeWithTargets, error)
-	GetChange(ctx context.Context, id uuid.UUID) (*beacondomain.Change, error)
-	GetChangesWithPendingTargets(ctx context.Context) ([]*beacondomain.Change, error)
-	GetPendingTargetsForChange(ctx context.Context, changeID uuid.UUID) ([]controllerdomain.ChangeTarget, error)
+		change model.Change,
+	) (*model.Change, error)
+	GetChange(ctx context.Context, id uuid.UUID) (*model.Change, error)
+	GetChangesWithPendingTargets(ctx context.Context) ([]*model.Change, error)
+	GetPendingTargetsForChange(ctx context.Context, changeID uuid.UUID) ([]model.ChangeTarget, error)
 	UpdateChangeTargetStatus(
 		ctx context.Context,
 		changeID uuid.UUID,
 		hostName string,
-		status controllerdomain.ChangeTargetStatus,
+		status model.ChangeTargetStatus,
 	) error
 }
 
@@ -77,11 +76,11 @@ var _ ChangeRepository = (*PostgresChangeRepository)(nil)
 
 func (r *PostgresChangeRepository) CreateChange(
 	ctx context.Context,
-	change controllerdomain.ChangeWithTargets,
-) (*controllerdomain.ChangeWithTargets, error) {
+	change model.Change,
+) (*model.Change, error) {
 	var changeData any
 	switch change.Type {
-	case beacondomain.ChangeTypeZone:
+	case model.ChangeTypeZone:
 		changeData = change.ZoneChange
 	default:
 		return nil, fmt.Errorf("failed to create change: unknown change type: %s", change.Type)
@@ -107,10 +106,10 @@ func (r *PostgresChangeRepository) CreateChange(
 	return &change, nil
 }
 
-func (r *PostgresChangeRepository) GetChange(ctx context.Context, id uuid.UUID) (*beacondomain.Change, error) {
+func (r *PostgresChangeRepository) GetChange(ctx context.Context, id uuid.UUID) (*model.Change, error) {
 	row := r.db.QueryRow(ctx, getChangeQuery, id)
 
-	var change beacondomain.Change
+	var change model.Change
 	var changeData []byte
 	err := row.Scan(&change.ID, &change.Type, &changeData, &change.SubmittedAt)
 	if err != nil {
@@ -118,8 +117,8 @@ func (r *PostgresChangeRepository) GetChange(ctx context.Context, id uuid.UUID) 
 	}
 
 	switch change.Type {
-	case beacondomain.ChangeTypeZone:
-		var zoneChange beacondomain.ZoneChange
+	case model.ChangeTypeZone:
+		var zoneChange model.ZoneChange
 		err = json.Unmarshal(changeData, &zoneChange)
 		if err != nil {
 			return nil, fmt.Errorf("failed to unmarshal zone change data for change %s: %w", id, err)
@@ -135,7 +134,7 @@ func (r *PostgresChangeRepository) GetChange(ctx context.Context, id uuid.UUID) 
 func (r *PostgresChangeRepository) createChangeTargets(
 	ctx context.Context,
 	changeID uuid.UUID,
-	targets []controllerdomain.ChangeTarget,
+	targets []model.ChangeTarget,
 ) error {
 	for _, target := range targets {
 		_, err := r.db.Exec(ctx, insertChangeTargetQuery, changeID, target.Server.ID)
@@ -151,7 +150,7 @@ func (r *PostgresChangeRepository) createChangeTargets(
 	return nil
 }
 
-func (r *PostgresChangeRepository) GetChangesWithPendingTargets(ctx context.Context) ([]*beacondomain.Change, error) {
+func (r *PostgresChangeRepository) GetChangesWithPendingTargets(ctx context.Context) ([]*model.Change, error) {
 	var err error
 	rows, err := r.db.Query(ctx, getChangesWithPendingTargetsQuery)
 	if err != nil {
@@ -159,9 +158,9 @@ func (r *PostgresChangeRepository) GetChangesWithPendingTargets(ctx context.Cont
 	}
 	defer rows.Close()
 
-	var changes []*beacondomain.Change
+	var changes []*model.Change
 	for rows.Next() {
-		var change beacondomain.Change
+		var change model.Change
 		var changeData []byte
 		err = rows.Scan(&change.ID, &change.Type, &changeData, &change.SubmittedAt)
 		if err != nil {
@@ -169,8 +168,8 @@ func (r *PostgresChangeRepository) GetChangesWithPendingTargets(ctx context.Cont
 		}
 
 		switch change.Type {
-		case beacondomain.ChangeTypeZone:
-			var zoneChange beacondomain.ZoneChange
+		case model.ChangeTypeZone:
+			var zoneChange model.ZoneChange
 			err = json.Unmarshal(changeData, &zoneChange)
 			if err != nil {
 				return nil, fmt.Errorf("failed to unmarshal zone change data for change %s: %w", change.ID, err)
@@ -193,7 +192,7 @@ func (r *PostgresChangeRepository) GetChangesWithPendingTargets(ctx context.Cont
 func (r *PostgresChangeRepository) GetPendingTargetsForChange(
 	ctx context.Context,
 	changeID uuid.UUID,
-) ([]controllerdomain.ChangeTarget, error) {
+) ([]model.ChangeTarget, error) {
 	var err error
 	rows, err := r.db.Query(ctx, getPendingTargetsForChangeQuery, changeID)
 	if err != nil {
@@ -201,9 +200,9 @@ func (r *PostgresChangeRepository) GetPendingTargetsForChange(
 	}
 	defer rows.Close()
 
-	var targets []controllerdomain.ChangeTarget
+	var targets []model.ChangeTarget
 	for rows.Next() {
-		var target controllerdomain.ChangeTarget
+		var target model.ChangeTarget
 		err = rows.Scan(&target.Status,
 			&target.SyncedAt,
 			&target.Server.ID,
@@ -227,7 +226,7 @@ func (r *PostgresChangeRepository) UpdateChangeTargetStatus(
 	ctx context.Context,
 	changeID uuid.UUID,
 	hostname string,
-	status controllerdomain.ChangeTargetStatus,
+	status model.ChangeTargetStatus,
 ) error {
 	_, err := r.db.Exec(ctx, updateChangeTargetStatusQuery, changeID, hostname, status)
 	if err != nil {

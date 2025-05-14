@@ -6,7 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
-	"github.com/davidseybold/beacondns/internal/controller/zone"
+	"github.com/davidseybold/beacondns/internal/zone"
 )
 
 func NewHTTPHandler(zoneService zone.Service) http.Handler {
@@ -18,9 +18,12 @@ func NewHTTPHandler(zoneService zone.Service) http.Handler {
 
 	r.GET("/health", handler.Health)
 
-	r.POST("/zones", handler.CreateZone)
-	r.GET("/zones", handler.ListZones)
-	r.GET("/zones/:id", handler.GetZone)
+	{
+		g := r.Group("/zones")
+		g.POST("", handler.CreateZone)
+		g.GET("", handler.ListZones)
+		g.GET("/:id", handler.GetZone)
+	}
 
 	return r
 }
@@ -76,7 +79,17 @@ func (h *handler) CreateZone(c *gin.Context) {
 		return
 	}
 
-	resp := NewCreateZoneResponse(*res)
+	resp := CreateZoneResponse{
+		ChangeInfo: ChangeInfo{
+			ID:          res.Change.ID.String(),
+			Status:      string(res.Change.Status()),
+			SubmittedAt: res.Change.SubmittedAt.Format("2006-01-02T15:04:05Z"),
+		},
+		Zone: Zone{
+			ID:   res.Zone.ID.String(),
+			Name: res.Zone.Name,
+		},
+	}
 
 	c.JSON(http.StatusCreated, resp)
 }

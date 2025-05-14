@@ -13,8 +13,8 @@ import (
 	"github.com/oklog/run"
 	amqp "github.com/rabbitmq/amqp091-go"
 
-	"github.com/davidseybold/beacondns/internal/libs/logger"
-	"github.com/davidseybold/beacondns/internal/libs/messaging"
+	"github.com/davidseybold/beacondns/internal/logger"
+	"github.com/davidseybold/beacondns/internal/messaging"
 	"github.com/davidseybold/beacondns/internal/resolver"
 )
 
@@ -40,7 +40,6 @@ func main() {
 }
 
 func start(ctx context.Context, _ io.Writer) error {
-
 	logger := logger.NewJSONLogger(slog.LevelInfo, os.Stdout)
 
 	cfg, err := loadConfig()

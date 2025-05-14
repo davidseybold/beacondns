@@ -13,7 +13,7 @@ func NewJSONLogger(level slog.Level, w io.Writer) *slog.Logger {
 }
 
 func NewDiscardLogger() *slog.Logger {
-	return slog.New(discardHandler{})
+	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
 
 func GetLogLevelFromString(level string) slog.Level {

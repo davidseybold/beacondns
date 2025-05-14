@@ -6,9 +6,8 @@ import (
 
 	"github.com/google/uuid"
 
-	controllerdomain "github.com/davidseybold/beacondns/internal/controller/domain"
-	beacondomain "github.com/davidseybold/beacondns/internal/domain"
-	"github.com/davidseybold/beacondns/internal/libs/db/postgres"
+	"github.com/davidseybold/beacondns/internal/db/postgres"
+	"github.com/davidseybold/beacondns/internal/model"
 )
 
 const (
@@ -27,9 +26,9 @@ type PostgresZoneRepository struct {
 }
 
 type CreateZoneParams struct {
-	Zone controllerdomain.Zone
-	SOA  beacondomain.ResourceRecordSet
-	NS   beacondomain.ResourceRecordSet
+	Zone model.Zone
+	SOA  model.ResourceRecordSet
+	NS   model.ResourceRecordSet
 }
 
 func (p *PostgresZoneRepository) CreateZone(ctx context.Context, params CreateZoneParams) error {
@@ -37,7 +36,7 @@ func (p *PostgresZoneRepository) CreateZone(ctx context.Context, params CreateZo
 		return fmt.Errorf("failed to create zone %s: %w", params.Zone.Name, err)
 	}
 
-	if err := p.insertResourceRecordSets(ctx, params.Zone.ID, []beacondomain.ResourceRecordSet{params.SOA, params.NS}); err != nil {
+	if err := p.insertResourceRecordSets(ctx, params.Zone.ID, []model.ResourceRecordSet{params.SOA, params.NS}); err != nil {
 		return fmt.Errorf("failed to create initial resource record sets for zone %s: %w", params.Zone.Name, err)
 	}
 
@@ -47,7 +46,7 @@ func (p *PostgresZoneRepository) CreateZone(ctx context.Context, params CreateZo
 func (p *PostgresZoneRepository) insertResourceRecordSets(
 	ctx context.Context,
 	zoneID uuid.UUID,
-	recordSets []beacondomain.ResourceRecordSet,
+	recordSets []model.ResourceRecordSet,
 ) error {
 	var err error
 	for _, recordSet := range recordSets {

@@ -10,12 +10,11 @@ import (
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/proto"
 
-	controllerdomain "github.com/davidseybold/beacondns/internal/controller/domain"
-	"github.com/davidseybold/beacondns/internal/controller/repository"
 	"github.com/davidseybold/beacondns/internal/convert"
-	beacondomain "github.com/davidseybold/beacondns/internal/domain"
-	beacondnspb "github.com/davidseybold/beacondns/internal/libs/gen/proto/beacondns/v1"
-	"github.com/davidseybold/beacondns/internal/libs/messaging"
+	beacondnspb "github.com/davidseybold/beacondns/internal/gen/proto/beacondns/v1"
+	"github.com/davidseybold/beacondns/internal/messaging"
+	"github.com/davidseybold/beacondns/internal/model"
+	"github.com/davidseybold/beacondns/internal/repository"
 )
 
 type Config struct {
@@ -130,7 +129,7 @@ func (s *Syncer) processPendingChanges(ctx context.Context) error {
 	return nil
 }
 
-func (s *Syncer) processChange(ctx context.Context, change *beacondomain.Change) error {
+func (s *Syncer) processChange(ctx context.Context, change *model.Change) error {
 	var err error
 	targets, err := s.registry.GetChangeRepository().GetPendingTargetsForChange(ctx, change.ID)
 	if err != nil {
@@ -154,15 +153,15 @@ func (s *Syncer) processChange(ctx context.Context, change *beacondomain.Change)
 
 func (s *Syncer) sendChangeToTarget(
 	ctx context.Context,
-	change *beacondomain.Change,
-	target controllerdomain.ChangeTarget,
+	change *model.Change,
+	target model.ChangeTarget,
 ) error {
 	headers := messaging.Headers{
 		messaging.HeaderKeyHost:    target.Server.HostName,
 		messaging.HeaderKeyReplyTo: s.acknowledgmentQueue,
 	}
 
-	protoChange := convert.DomainChangeToProto(change)
+	protoChange := convert.ChangeToProto(change)
 	protoChangeBytes, err := proto.Marshal(protoChange)
 	if err != nil {
 		return fmt.Errorf("failed to marshal change: %w", err)
@@ -184,7 +183,7 @@ func (s *Syncer) sendChangeToTarget(
 		ctx,
 		change.ID,
 		target.Server.HostName,
-		controllerdomain.ChangeTargetStatusSent,
+		model.ChangeTargetStatusSent,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to update target status: %w", err)
@@ -213,7 +212,7 @@ func (s *Syncer) handleAcknowledgment(body []byte, headers messaging.Headers) er
 		context.Background(),
 		changeID,
 		host,
-		controllerdomain.ChangeTargetStatusInSync,
+		model.ChangeTargetStatusInSync,
 	)
 	if err != nil {
 		return messaging.NewConsumerError(fmt.Errorf("failed to update target status: %w", err), true)

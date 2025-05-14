@@ -16,13 +16,13 @@ import (
 	"github.com/oklog/run"
 	amqp "github.com/rabbitmq/amqp091-go"
 
-	"github.com/davidseybold/beacondns/internal/controller/api"
-	"github.com/davidseybold/beacondns/internal/controller/repository"
-	"github.com/davidseybold/beacondns/internal/controller/syncer"
-	"github.com/davidseybold/beacondns/internal/controller/zone"
-	"github.com/davidseybold/beacondns/internal/libs/db/postgres"
-	"github.com/davidseybold/beacondns/internal/libs/logger"
-	"github.com/davidseybold/beacondns/internal/libs/messaging"
+	"github.com/davidseybold/beacondns/internal/api"
+	"github.com/davidseybold/beacondns/internal/db/postgres"
+	"github.com/davidseybold/beacondns/internal/logger"
+	"github.com/davidseybold/beacondns/internal/messaging"
+	"github.com/davidseybold/beacondns/internal/repository"
+	"github.com/davidseybold/beacondns/internal/syncer"
+	"github.com/davidseybold/beacondns/internal/zone"
 )
 
 const (

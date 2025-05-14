@@ -4,7 +4,7 @@ package beacondns.v1;
 
 import "google/protobuf/timestamp.proto";
 
-option go_package = "github.com/davidseybold/beacondns/internal/libs/gen/proto/beacondns/v1;beacondnspb";
+option go_package = "github.com/davidseybold/beacondns/internal/gen/proto/beacondns/v1;beacondnspb";
 
 // Constants for zone and resource record set actions
 enum ZoneChangeAction {
@@ -32,14 +32,6 @@ enum RRType {
   RR_TYPE_TXT = 7;
   RR_TYPE_SRV = 8;
   RR_TYPE_PTR = 9;
-  RR_TYPE_CAA = 10;
-  RR_TYPE_NAPTR = 11;
-  RR_TYPE_DS = 12;
-  RR_TYPE_DNSKEY = 13;
-  RR_TYPE_RRSIG = 14;
-  RR_TYPE_NSEC = 15;
-  RR_TYPE_TLSA = 16;
-  RR_TYPE_SPF = 17;
 }
 
 enum ChangeType {

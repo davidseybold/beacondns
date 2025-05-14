@@ -8,9 +8,9 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	beacondnspb "github.com/davidseybold/beacondns/internal/libs/gen/proto/beacondns/v1"
-	"github.com/davidseybold/beacondns/internal/libs/logger"
-	"github.com/davidseybold/beacondns/internal/libs/messaging"
+	beacondnspb "github.com/davidseybold/beacondns/internal/gen/proto/beacondns/v1"
+	"github.com/davidseybold/beacondns/internal/logger"
+	"github.com/davidseybold/beacondns/internal/messaging"
 )
 
 type ChangeListenerConfig struct {
