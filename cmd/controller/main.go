@@ -14,7 +14,6 @@ import (
 	"github.com/caarlos0/env/v11"
 	"github.com/joho/godotenv"
 	"github.com/oklog/run"
-	amqp "github.com/rabbitmq/amqp091-go"
 
 	"github.com/davidseybold/beacondns/internal/api"
 	"github.com/davidseybold/beacondns/internal/db/postgres"
@@ -95,7 +94,7 @@ func start(ctx context.Context, w io.Writer) error {
 	zoneService := zone.NewService(repoRegistry)
 
 	syncerCtx, syncerCancel := context.WithCancel(ctx)
-	syncer, err := syncer.New(syncerCtx, syncer.Config{
+	syncer, err := syncer.New(syncer.Config{
 		Registry:            repoRegistry,
 		Publisher:           messaging.Publisher,
 		Consumer:            messaging.Consumer,
@@ -137,7 +136,7 @@ func start(ctx context.Context, w io.Writer) error {
 	}
 	{
 		g.Add(func() error {
-			return syncer.Start()
+			return syncer.Start(syncerCtx)
 		}, func(_ error) {
 			syncerCancel()
 		})
@@ -174,8 +173,8 @@ type messagingInfrastructure struct {
 	Publisher messaging.Publisher
 	Consumer  messaging.Consumer
 
-	publishConn *amqp.Connection
-	consumeConn *amqp.Connection
+	publishConn messaging.AMQPConnection
+	consumeConn messaging.AMQPConnection
 }
 
 func (m *messagingInfrastructure) Close() error {
@@ -191,7 +190,7 @@ func (m *messagingInfrastructure) Close() error {
 }
 
 func setupMessaging(host string) (*messagingInfrastructure, error) {
-	publishConn, err := amqp.Dial(host)
+	publishConn, err := messaging.DialAMQP(host)
 	if err != nil {
 		return nil, fmt.Errorf("error creating RabbitMQ connection: %w", err)
 	}
@@ -201,14 +200,14 @@ func setupMessaging(host string) (*messagingInfrastructure, error) {
 		return nil, fmt.Errorf("error creating RabbitMQ publisher: %w", err)
 	}
 
-	consumeConn, err := amqp.Dial(host)
+	consumeConn, err := messaging.DialAMQP(host)
 	if err != nil {
 		return nil, fmt.Errorf("error creating RabbitMQ connection: %w", err)
 	}
 
 	consumer := messaging.NewRabbitMQConsumer("controller", consumeConn)
 
-	err = messaging.SetupRabbitMQTopology(consumeConn, messaging.RabbitMQTopology{
+	err = messaging.SetupAMQPTopology(consumeConn, messaging.RabbitMQTopology{
 		Exchange: messaging.RabbitMQExchange{
 			Name: exchangeName,
 			Kind: "topic",

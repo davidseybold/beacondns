@@ -9,6 +9,10 @@ import (
 )
 
 func ChangeToProto(ch *model.Change) *beacondnspb.Change {
+	if ch == nil {
+		return nil
+	}
+
 	var submittedAt *timestamppb.Timestamp
 	if ch.SubmittedAt != nil {
 		submittedAt = timestamppb.New(*ch.SubmittedAt)
@@ -23,9 +27,16 @@ func ChangeToProto(ch *model.Change) *beacondnspb.Change {
 }
 
 func ChangeFromProto(ch *beacondnspb.Change) *model.Change {
+	if ch == nil {
+		return nil
+	}
+
+	submittedAt := ch.GetSubmittedAt().AsTime()
 	return &model.Change{
-		ID:   uuid.MustParse(ch.GetId()),
-		Type: model.ChangeType(ch.GetType()),
+		ID:          uuid.MustParse(ch.GetId()),
+		Type:        ChangeTypeFromProto(ch.GetType()),
+		SubmittedAt: &submittedAt,
+		ZoneChange:  ZoneChangeFromProto(ch.GetZoneChange()),
 	}
 }
 
@@ -78,7 +89,7 @@ func ZoneChangeFromProto(ch *beacondnspb.ZoneChange) *model.ZoneChange {
 
 	return &model.ZoneChange{
 		ZoneName: ch.GetZoneName(),
-		Action:   model.ZoneChangeAction(ch.GetAction()),
+		Action:   ZoneChangeActionFromProto(ch.GetAction()),
 		Changes:  changes,
 	}
 }
@@ -112,12 +123,21 @@ func ZoneChangeActionFromProto(chAction beacondnspb.ZoneChangeAction) model.Zone
 }
 
 func ResourceRecordSetChangeToProto(ch *model.ResourceRecordSetChange) *beacondnspb.ResourceRecordSetChange {
+	if ch == nil {
+		return nil
+	}
+
 	return &beacondnspb.ResourceRecordSetChange{
-		Action: RRSetChangeActionToProto(ch.Action),
+		Action:            RRSetChangeActionToProto(ch.Action),
+		ResourceRecordSet: ResourceRecordSetToProto(&ch.ResourceRecordSet),
 	}
 }
 
 func ResourceRecordSetChangeFromProto(ch *beacondnspb.ResourceRecordSetChange) *model.ResourceRecordSetChange {
+	if ch == nil {
+		return nil
+	}
+
 	return &model.ResourceRecordSetChange{
 		Action:            RRSetChangeActionFromProto(ch.GetAction()),
 		ResourceRecordSet: *ResourceRecordSetFromProto(ch.GetResourceRecordSet()),
@@ -152,43 +172,59 @@ func RRSetChangeActionFromProto(chAction beacondnspb.RRSetChangeAction) model.RR
 	}
 }
 
-func ResourceRecordSetToProto(ch *model.ResourceRecordSet) *beacondnspb.ResourceRecordSet {
-	records := make([]*beacondnspb.ResourceRecord, len(ch.ResourceRecords))
-	for i, record := range ch.ResourceRecords {
+func ResourceRecordSetToProto(rrset *model.ResourceRecordSet) *beacondnspb.ResourceRecordSet {
+	if rrset == nil {
+		return nil
+	}
+
+	records := make([]*beacondnspb.ResourceRecord, len(rrset.ResourceRecords))
+	for i, record := range rrset.ResourceRecords {
 		records[i] = ResourceRecordToProto(&record)
 	}
 
 	return &beacondnspb.ResourceRecordSet{
-		Name:            ch.Name,
-		Type:            RRTypeToProto(ch.Type),
-		Ttl:             ch.TTL,
+		Name:            rrset.Name,
+		Type:            RRTypeToProto(rrset.Type),
+		Ttl:             rrset.TTL,
 		ResourceRecords: records,
 	}
 }
 
-func ResourceRecordSetFromProto(ch *beacondnspb.ResourceRecordSet) *model.ResourceRecordSet {
-	records := make([]model.ResourceRecord, len(ch.GetResourceRecords()))
-	for i, record := range ch.GetResourceRecords() {
+func ResourceRecordSetFromProto(rrset *beacondnspb.ResourceRecordSet) *model.ResourceRecordSet {
+	if rrset == nil {
+		return nil
+	}
+
+	records := make([]model.ResourceRecord, len(rrset.GetResourceRecords()))
+	for i, record := range rrset.GetResourceRecords() {
 		records[i] = *ResourceRecordFromProto(record)
 	}
 
 	return &model.ResourceRecordSet{
-		Name:            ch.GetName(),
-		Type:            RRTypeFromProto(ch.GetType()),
-		TTL:             ch.GetTtl(),
+		Name:            rrset.GetName(),
+		Type:            RRTypeFromProto(rrset.GetType()),
+		TTL:             rrset.GetTtl(),
 		ResourceRecords: records,
 	}
 }
 
-func ResourceRecordToProto(ch *model.ResourceRecord) *beacondnspb.ResourceRecord {
+func ResourceRecordToProto(rr *model.ResourceRecord) *beacondnspb.ResourceRecord {
+	if rr == nil {
+		return nil
+	}
+
 	return &beacondnspb.ResourceRecord{
-		Value: ch.Value,
+		Value: rr.Value,
 	}
 }
 
-func ResourceRecordFromProto(ch *beacondnspb.ResourceRecord) *model.ResourceRecord {
+func ResourceRecordFromProto(rr *beacondnspb.ResourceRecord) *model.ResourceRecord {
+	if rr == nil {
+		return nil
+	}
+
 	return &model.ResourceRecord{
-		Value: ch.GetValue(),
+		Value: rr.GetValue(),
 	}
 }
 
@@ -237,7 +273,6 @@ func RRTypeFromProto(chType beacondnspb.RRType) model.RRType {
 		return model.RRTypeSRV
 	case beacondnspb.RRType_RR_TYPE_TXT:
 		return model.RRTypeTXT
-
 	case beacondnspb.RRType_RR_TYPE_UNSPECIFIED:
 		return model.RRTypeA
 	default:

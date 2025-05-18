@@ -9,7 +9,6 @@ const HeaderKeyReplyTo = "x-reply-to"
 
 type Publisher interface {
 	Publish(ctx context.Context, routeKey string, headers Headers, message []byte) error
-	Close() error
 }
 
 type Consumer interface {

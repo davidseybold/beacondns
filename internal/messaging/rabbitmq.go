@@ -8,7 +8,7 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-type amqpChannel interface {
+type AMQPChannel interface {
 	Publish(exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error
 	PublishWithContext(ctx context.Context, exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error
 	Close() error
@@ -42,134 +42,40 @@ type amqpChannel interface {
 	NotifyConfirm(ack, nack chan uint64) (chan uint64, chan uint64)
 }
 
-type amqpChannelAdapter struct {
+type AMQPChannelAdapter struct {
 	*amqp.Channel
 }
 
-var _ amqpChannel = (*amqpChannelAdapter)(nil)
+var _ AMQPChannel = (*AMQPChannelAdapter)(nil)
 
-func (a *amqpChannelAdapter) Publish(exchange, key string, mandatory, immediate bool, msg amqp.Publishing) error {
-	return a.Channel.Publish(exchange, key, mandatory, immediate, msg)
-}
-
-func (a *amqpChannelAdapter) PublishWithContext(
-	ctx context.Context,
-	exchange,
-	key string,
-	mandatory,
-	immediate bool,
-	msg amqp.Publishing,
-) error {
-	return a.Channel.PublishWithContext(ctx, exchange, key, mandatory, immediate, msg)
-}
-
-func (a *amqpChannelAdapter) Qos(prefetchCount, prefetchSize int, global bool) error {
-	return a.Channel.Qos(prefetchCount, prefetchSize, global)
-}
-
-func (a *amqpChannelAdapter) QueueDeclare(
-	name string,
-	durable, autoDelete, exclusive, noWait bool,
-	args amqp.Table,
-) (amqp.Queue, error) {
-	return a.Channel.QueueDeclare(name, durable, autoDelete, exclusive, noWait, args)
-}
-
-func (a *amqpChannelAdapter) QueueBind(name, key, exchange string, noWait bool, args amqp.Table) error {
-	return a.Channel.QueueBind(name, key, exchange, noWait, args)
-}
-
-func (a *amqpChannelAdapter) QueueUnbind(name, key, exchange string, args amqp.Table) error {
-	return a.Channel.QueueUnbind(name, key, exchange, args)
-}
-
-func (a *amqpChannelAdapter) QueueDelete(name string, ifUnused, ifEmpty, noWait bool) (int, error) {
-	return a.Channel.QueueDelete(name, ifUnused, ifEmpty, noWait)
-}
-
-func (a *amqpChannelAdapter) QueuePurge(name string, noWait bool) (int, error) {
-	return a.Channel.QueuePurge(name, noWait)
-}
-
-func (a *amqpChannelAdapter) ExchangeDeclare(
-	name, kind string,
-	durable, autoDelete, internal, noWait bool,
-	args amqp.Table,
-) error {
-	return a.Channel.ExchangeDeclare(name, kind, durable, autoDelete, internal, noWait, args)
-}
-
-func (a *amqpChannelAdapter) ExchangeDelete(name string, ifUnused, noWait bool) error {
-	return a.Channel.ExchangeDelete(name, ifUnused, noWait)
-}
-
-func (a *amqpChannelAdapter) ExchangeBind(destination, key, source string, noWait bool, args amqp.Table) error {
-	return a.Channel.ExchangeBind(destination, key, source, noWait, args)
-}
-
-func (a *amqpChannelAdapter) ExchangeUnbind(destination, key, source string, noWait bool, args amqp.Table) error {
-	return a.Channel.ExchangeUnbind(destination, key, source, noWait, args)
-}
-
-func (a *amqpChannelAdapter) Consume(
-	queue, consumer string,
-	autoAck, exclusive, noLocal, noWait bool,
-	args amqp.Table,
-) (<-chan amqp.Delivery, error) {
-	return a.Channel.Consume(queue, consumer, autoAck, exclusive, noLocal, noWait, args)
-}
-
-func (a *amqpChannelAdapter) Cancel(consumer string, noWait bool) error {
-	return a.Channel.Cancel(consumer, noWait)
-}
-
-func (a *amqpChannelAdapter) Confirm(noWait bool) error {
-	return a.Channel.Confirm(noWait)
-}
-
-func (a *amqpChannelAdapter) NotifyPublish(confirm chan amqp.Confirmation) chan amqp.Confirmation {
-	return a.Channel.NotifyPublish(confirm)
-}
-
-func (a *amqpChannelAdapter) NotifyReturn(ret chan amqp.Return) chan amqp.Return {
-	return a.Channel.NotifyReturn(ret)
-}
-
-func (a *amqpChannelAdapter) NotifyFlow(flow chan bool) chan bool {
-	return a.Channel.NotifyFlow(flow)
-}
-
-func (a *amqpChannelAdapter) NotifyClose(c chan *amqp.Error) chan *amqp.Error {
-	return a.Channel.NotifyClose(c)
-}
-
-func (a *amqpChannelAdapter) NotifyCancel(cancel chan string) chan string {
-	return a.Channel.NotifyCancel(cancel)
-}
-
-func (a *amqpChannelAdapter) NotifyConfirm(ack, nack chan uint64) (chan uint64, chan uint64) {
-	return a.Channel.NotifyConfirm(ack, nack)
-}
-
-type amqpConnection interface {
-	Channel() (amqpChannel, error)
+type AMQPConnection interface {
+	Channel() (AMQPChannel, error)
 	Close() error
 }
 
-type amqpConnectionAdapter struct {
+type AMQPConnectionAdapter struct {
 	*amqp.Connection
 }
 
-func (a *amqpConnectionAdapter) Channel() (amqpChannel, error) {
+func (a *AMQPConnectionAdapter) Channel() (AMQPChannel, error) {
 	ch, err := a.Connection.Channel()
 	if err != nil {
 		return nil, err
 	}
-	return &amqpChannelAdapter{Channel: ch}, nil
+	return &AMQPChannelAdapter{Channel: ch}, nil
+}
+
+func DialAMQP(connString string) (AMQPConnection, error) {
+	conn, err := amqp.Dial(connString)
+	if err != nil {
+		return nil, err
+	}
+	return &AMQPConnectionAdapter{Connection: conn}, nil
 }
 
 type RabbitMQPublisher struct {
-	channel      amqpChannel
+	conn         AMQPConnection
+	channel      AMQPChannel
 	exchangeName string
 	confirms     chan amqp.Confirmation
 	close        chan *amqp.Error
@@ -177,9 +83,8 @@ type RabbitMQPublisher struct {
 
 var _ Publisher = (*RabbitMQPublisher)(nil)
 
-func NewRabbitMQPublisher(conn *amqp.Connection, exchangeName string) (*RabbitMQPublisher, error) {
-	adapter := &amqpConnectionAdapter{Connection: conn}
-	channel, err := adapter.Channel()
+func NewRabbitMQPublisher(conn AMQPConnection, exchangeName string) (*RabbitMQPublisher, error) {
+	channel, err := conn.Channel()
 	if err != nil {
 		return nil, err
 	}
@@ -191,6 +96,7 @@ func NewRabbitMQPublisher(conn *amqp.Connection, exchangeName string) (*RabbitMQ
 	}
 
 	return &RabbitMQPublisher{
+		conn:         conn,
 		channel:      channel,
 		exchangeName: exchangeName,
 		confirms:     channel.NotifyPublish(make(chan amqp.Confirmation, 1)),
@@ -228,16 +134,12 @@ func (r *RabbitMQPublisher) Publish(ctx context.Context, routeKey string, header
 	return nil
 }
 
-func (r *RabbitMQPublisher) Close() error {
-	return r.channel.Close()
-}
-
 type RabbitMQConsumerConfig struct {
 	ConsumerName string
 }
 
 type RabbitMQConsumer struct {
-	conn         amqpConnection
+	conn         AMQPConnection
 	autoAck      bool
 	exclusive    bool
 	noLocal      bool
@@ -247,11 +149,9 @@ type RabbitMQConsumer struct {
 
 type RabbitMQConsumerHandler func(body []byte, headers Headers) error
 
-func NewRabbitMQConsumer(consumerName string, conn *amqp.Connection) *RabbitMQConsumer {
-	adapter := &amqpConnectionAdapter{Connection: conn}
-
+func NewRabbitMQConsumer(consumerName string, conn AMQPConnection) *RabbitMQConsumer {
 	return &RabbitMQConsumer{
-		conn:         adapter,
+		conn:         conn,
 		consumerName: consumerName,
 		autoAck:      false,
 		exclusive:    true,
@@ -323,9 +223,8 @@ type RabbitMQTopology struct {
 	Queues   []string
 }
 
-func SetupRabbitMQTopology(conn *amqp.Connection, topology RabbitMQTopology) error {
-	adapter := &amqpConnectionAdapter{Connection: conn}
-	channel, err := adapter.Channel()
+func SetupAMQPTopology(conn AMQPConnection, topology RabbitMQTopology) error {
+	channel, err := conn.Channel()
 	if err != nil {
 		return fmt.Errorf("failed to create channel: %w", err)
 	}

@@ -60,7 +60,6 @@ func (c *Config) Validate() error {
 }
 
 type Syncer struct {
-	ctx                 context.Context
 	registry            repository.Registry
 	publisher           messaging.Publisher
 	consumer            messaging.Consumer
@@ -69,13 +68,12 @@ type Syncer struct {
 	acknowledgmentQueue string
 }
 
-func New(ctx context.Context, config Config) (*Syncer, error) {
+func New(config Config) (*Syncer, error) {
 	if err := config.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 
 	return &Syncer{
-		ctx:                 ctx,
 		registry:            config.Registry,
 		publisher:           config.Publisher,
 		consumer:            config.Consumer,
@@ -85,16 +83,16 @@ func New(ctx context.Context, config Config) (*Syncer, error) {
 	}, nil
 }
 
-func (s *Syncer) Start() error {
-	go s.startChangePoller(s.ctx)
+func (s *Syncer) Start(ctx context.Context) error {
+	go s.startChangePoller(ctx)
 
-	if err := s.consumer.Consume(s.ctx, s.acknowledgmentQueue, s.handleAcknowledgment); err != nil {
+	if err := s.consumer.Consume(ctx, s.acknowledgmentQueue, s.handleAcknowledgment); err != nil {
 		return fmt.Errorf("failed to start consumer: %w", err)
 	}
 
-	<-s.ctx.Done()
+	<-ctx.Done()
 
-	return s.ctx.Err()
+	return ctx.Err()
 }
 
 func (s *Syncer) startChangePoller(ctx context.Context) {

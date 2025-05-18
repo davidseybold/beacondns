@@ -1,4 +1,4 @@
-package resolver
+package beacon
 
 import (
 	"context"
@@ -8,49 +8,52 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"github.com/davidseybold/beacondns/internal/convert"
 	beacondnspb "github.com/davidseybold/beacondns/internal/gen/proto/beacondns/v1"
 	"github.com/davidseybold/beacondns/internal/logger"
 	"github.com/davidseybold/beacondns/internal/messaging"
+	"github.com/davidseybold/beacondns/internal/model"
 )
 
 type ChangeListenerConfig struct {
-	Consumer    messaging.Consumer
-	Publisher   messaging.Publisher
-	ChangeQueue string
-	Logger      *slog.Logger
+	Consumer     messaging.Consumer
+	Publisher    messaging.Publisher
+	ChangeQueue  string
+	Logger       *slog.Logger
+	OnZoneChange func(ch *model.ZoneChange) error
 }
 
 type ChangeListener struct {
-	ctx         context.Context
-	logger      *slog.Logger
-	consumer    messaging.Consumer
-	publisher   messaging.Publisher
-	changeQueue string
+	logger       *slog.Logger
+	consumer     messaging.Consumer
+	publisher    messaging.Publisher
+	changeQueue  string
+	onZoneChange func(ch *model.ZoneChange) error
 }
 
-func NewChangeListener(ctx context.Context, config ChangeListenerConfig) *ChangeListener {
+func NewChangeListener(config ChangeListenerConfig) *ChangeListener {
 	if config.Logger == nil {
 		config.Logger = logger.NewDiscardLogger()
 	}
 
 	return &ChangeListener{
-		ctx:         ctx,
-		consumer:    config.Consumer,
-		publisher:   config.Publisher,
-		changeQueue: config.ChangeQueue,
-		logger:      config.Logger,
+		consumer:     config.Consumer,
+		publisher:    config.Publisher,
+		changeQueue:  config.ChangeQueue,
+		logger:       config.Logger,
+		onZoneChange: config.OnZoneChange,
 	}
 }
 
-func (l *ChangeListener) Run() error {
-	err := l.consumer.Consume(l.ctx, l.changeQueue, l.handleMessage)
+func (l *ChangeListener) Run(ctx context.Context) error {
+	err := l.consumer.Consume(ctx, l.changeQueue, l.handleMessage)
 	if err != nil {
 		return err
 	}
 
-	<-l.ctx.Done()
+	<-ctx.Done()
 
-	return l.ctx.Err()
+	return ctx.Err()
 }
 
 func (l *ChangeListener) handleMessage(body []byte, headers messaging.Headers) error {
@@ -71,7 +74,18 @@ func (l *ChangeListener) handleMessage(body []byte, headers messaging.Headers) e
 		return messaging.NewConsumerError(fmt.Errorf("failed to unmarshal change: %w", err), false)
 	}
 
-	err := l.AckChange(host, replyTo, &pbChange)
+	ch := convert.ChangeFromProto(&pbChange)
+
+	var err error
+	if ch.Type == model.ChangeTypeZone {
+		err = l.onZoneChange(ch.ZoneChange)
+	}
+
+	if err != nil {
+		return messaging.NewConsumerError(err, true)
+	}
+
+	err = l.AckChange(host, replyTo, &pbChange)
 	if err != nil {
 		return err
 	}
@@ -93,7 +107,7 @@ func (l *ChangeListener) AckChange(host string, replyTo string, change *beacondn
 		return messaging.NewConsumerError(fmt.Errorf("failed to marshal change ack: %w", err), false)
 	}
 
-	err = l.publisher.Publish(l.ctx, replyTo, headers, body)
+	err = l.publisher.Publish(context.Background(), replyTo, headers, body)
 	if err != nil {
 		return messaging.NewConsumerError(fmt.Errorf("failed to publish change: %w", err), true)
 	}

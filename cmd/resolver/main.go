@@ -4,17 +4,13 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log/slog"
 	"os"
 	"strings"
 
 	"github.com/caarlos0/env/v11"
 	"github.com/joho/godotenv"
 	"github.com/oklog/run"
-	amqp "github.com/rabbitmq/amqp091-go"
 
-	"github.com/davidseybold/beacondns/internal/logger"
-	"github.com/davidseybold/beacondns/internal/messaging"
 	"github.com/davidseybold/beacondns/internal/resolver"
 )
 
@@ -23,8 +19,11 @@ const (
 )
 
 type config struct {
-	RabbitHost string `env:"BEACON_RABBITMQ_HOST"`
-	Host       string `env:"BEACON_HOST"`
+	DBPath       string        `env:"BEACON_DB_PATH"       envDefault:"/var/lib/beacon"`
+	RabbitHost   string        `env:"BEACON_RABBITMQ_HOST"`
+	Host         string        `env:"BEACON_HOSTNAME"`
+	ResolverType resolver.Type `env:"BEACON_RESOLVER_TYPE"`
+	Forwarder    string        `env:"BEACON_FORWARDER"`
 }
 
 func (c *config) Validate() error {
@@ -40,63 +39,34 @@ func main() {
 }
 
 func start(ctx context.Context, _ io.Writer) error {
-	logger := logger.NewJSONLogger(slog.LevelInfo, os.Stdout)
-
 	cfg, err := loadConfig()
 	if err != nil {
 		return err
 	}
 
-	publishConn, err := amqp.Dial(cfg.RabbitHost)
-	if err != nil {
-		return fmt.Errorf("error creating RabbitMQ connection: %w", err)
-	}
-	defer publishConn.Close()
-
-	publisher, err := messaging.NewRabbitMQPublisher(publishConn, "beacon")
-	if err != nil {
-		return fmt.Errorf("error creating RabbitMQ publisher: %w", err)
-	}
-	defer publisher.Close()
-
-	consumeConn, err := amqp.Dial(cfg.RabbitHost)
-	if err != nil {
-		return fmt.Errorf("error creating RabbitMQ connection: %w", err)
-	}
-	defer consumeConn.Close()
-
 	queueName := fmt.Sprintf("server.resolver.%s", cfg.Host)
-	consumerName := fmt.Sprintf("resolver.%s", cfg.Host)
 
-	consumer := messaging.NewRabbitMQConsumer(consumerName, consumeConn)
-
-	err = messaging.SetupRabbitMQTopology(consumeConn, messaging.RabbitMQTopology{
-		Exchange: messaging.RabbitMQExchange{
-			Name: exchangeName,
-			Kind: "topic",
-		},
-		Queues: []string{
-			queueName,
-		},
+	resolverCtx, cancelResolver := context.WithCancel(ctx)
+	dnsresolver, err := resolver.New(&resolver.Config{
+		Type:               cfg.ResolverType,
+		Forwarder:          &cfg.Forwarder,
+		HostName:           cfg.Host,
+		DBPath:             cfg.DBPath,
+		RabbitMQConnString: cfg.RabbitHost,
+		RabbitExchange:     exchangeName,
+		ChangeQueue:        queueName,
 	})
 	if err != nil {
-		return fmt.Errorf("error setting up RabbitMQ topology: %w", err)
+		cancelResolver()
+		return err
 	}
-
-	clCtx, clCancel := context.WithCancel(ctx)
-	changeListener := resolver.NewChangeListener(clCtx, resolver.ChangeListenerConfig{
-		Consumer:    consumer,
-		Publisher:   publisher,
-		ChangeQueue: queueName,
-		Logger:      logger,
-	})
 
 	var g run.Group
 	{
 		g.Add(func() error {
-			return changeListener.Run()
+			return dnsresolver.Run(resolverCtx)
 		}, func(_ error) {
-			clCancel()
+			cancelResolver()
 		})
 	}
 	g.Add(run.SignalHandler(ctx, os.Interrupt))
