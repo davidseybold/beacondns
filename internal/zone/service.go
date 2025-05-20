@@ -28,8 +28,8 @@ const (
 type Service interface {
 	// Zone management
 	CreateZone(ctx context.Context, name string) (*CreateZoneResult, error)
-	GetZone(ctx context.Context, id uuid.UUID) (*model.Zone, error)
-	ListZones(ctx context.Context) ([]model.Zone, error)
+	GetZone(ctx context.Context, id uuid.UUID) (*model.ZoneInfo, error)
+	ListZones(ctx context.Context) ([]model.ZoneInfo, error)
 
 	// Resource record management
 	ListResourceRecordSets(ctx context.Context, zoneID uuid.UUID) ([]model.ResourceRecordSet, error)
@@ -62,16 +62,13 @@ func (d *DefaultService) CreateZone(ctx context.Context, name string) (*CreateZo
 
 	zoneName := dns.Fqdn(name)
 
-	zone := model.Zone{
-		ID:   uuid.New(),
-		Name: zoneName,
-	}
+	zone := model.NewZone(zoneName)
 
 	nameServerNames := []string{"ns00.beacondns.org.", "ns01.beacondns.org."}
 
 	primaryNS := nameServerNames[0]
 
-	soa := model.NewSOA(
+	soaRecord := model.NewSOA(
 		zoneName,
 		soaRRTTL,
 		primaryNS,
@@ -82,44 +79,24 @@ func (d *DefaultService) CreateZone(ctx context.Context, name string) (*CreateZo
 		soaExpire,
 		soaMinimumTTL,
 	)
-	nsRec := model.NewNS(zoneName, nsRRTTL, nameServerNames)
+	nsRecord := model.NewNS(zoneName, nsRRTTL, nameServerNames)
 
-	params := repository.CreateZoneParams{
-		Zone: zone,
-		SOA:  soa,
-		NS:   nsRec,
-	}
+	zone.ResourceRecordSets = []model.ResourceRecordSet{soaRecord, nsRecord}
 
 	zoneChange := model.NewZoneChange(
 		zoneName,
 		model.ZoneChangeActionCreate,
 		[]model.ResourceRecordSetChange{
-			model.NewResourceRecordSetChange(model.RRSetChangeActionCreate, soa),
-			model.NewResourceRecordSetChange(model.RRSetChangeActionCreate, nsRec),
+			model.NewResourceRecordSetChange(model.RRSetChangeActionCreate, soaRecord),
+			model.NewResourceRecordSetChange(model.RRSetChangeActionCreate, nsRecord),
 		},
 	)
 
-	change := model.NewChangeWithZoneChange(zoneChange)
+	change := model.NewChangeWithZoneChange(zoneChange, model.ChangeStatusPending)
 
-	targetServers, err := d.registry.GetServerRepository().GetAllServers(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get target servers: %w", err)
-	}
-
-	changeTargets := make([]model.ChangeTarget, len(targetServers))
-
-	for i, server := range targetServers {
-		changeTargets[i] = model.ChangeTarget{
-			Server: *server,
-			Status: model.ChangeTargetStatusPending,
-		}
-	}
-
-	change.Targets = changeTargets
-
-	createZoneFunc := func(ctx context.Context, r repository.Registry) (any, error) {
+	rawResult, err := d.registry.InTx(ctx, func(ctx context.Context, r repository.Registry) (any, error) {
 		var createZoneErr error
-		createZoneErr = r.GetZoneRepository().CreateZone(ctx, params)
+		createZoneErr = r.GetZoneRepository().CreateZone(ctx, &zone)
 		if createZoneErr != nil {
 			return nil, createZoneErr
 		}
@@ -130,9 +107,7 @@ func (d *DefaultService) CreateZone(ctx context.Context, name string) (*CreateZo
 		}
 
 		return change, nil
-	}
-
-	rawResult, err := d.registry.WithinTransaction(ctx, createZoneFunc)
+	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to create zone: %w", err)
 	}
@@ -148,11 +123,11 @@ func (d *DefaultService) CreateZone(ctx context.Context, name string) (*CreateZo
 	}, nil
 }
 
-func (d *DefaultService) GetZone(_ context.Context, _ uuid.UUID) (*model.Zone, error) {
+func (d *DefaultService) GetZone(_ context.Context, _ uuid.UUID) (*model.ZoneInfo, error) {
 	panic("unimplemented")
 }
 
-func (d *DefaultService) ListZones(_ context.Context) ([]model.Zone, error) {
+func (d *DefaultService) ListZones(_ context.Context) ([]model.ZoneInfo, error) {
 	panic("unimplemented")
 }
 

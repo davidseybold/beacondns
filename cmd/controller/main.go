@@ -16,11 +16,12 @@ import (
 	"github.com/oklog/run"
 
 	"github.com/davidseybold/beacondns/internal/api"
+	"github.com/davidseybold/beacondns/internal/db/kvstore"
 	"github.com/davidseybold/beacondns/internal/db/postgres"
 	"github.com/davidseybold/beacondns/internal/logger"
 	"github.com/davidseybold/beacondns/internal/messaging"
 	"github.com/davidseybold/beacondns/internal/repository"
-	"github.com/davidseybold/beacondns/internal/syncer"
+	"github.com/davidseybold/beacondns/internal/worker"
 	"github.com/davidseybold/beacondns/internal/zone"
 )
 
@@ -30,14 +31,14 @@ const (
 )
 
 type serviceConfig struct {
-	Port            int    `env:"BEACON_CONTROLLER_PORT"  envDefault:"8080"`
-	DBHost          string `env:"BEACON_DB_HOST"`
-	DBName          string `env:"BEACON_DB_NAME"          envDefault:"beacon_db"`
-	DBUser          string `env:"BEACON_DB_USER"          envDefault:"beacon_controller"`
-	DBPass          string `env:"BEACON_DB_PASSWORD"`
-	DBPort          int    `env:"BEACON_DB_PORT"          envDefault:"5432"`
-	RabbitHost      string `env:"BEACON_RABBITMQ_HOST"`
-	ShutdownTimeout int    `env:"BEACON_SHUTDOWN_TIMEOUT" envDefault:"30"`
+	Port            int      `env:"BEACON_CONTROLLER_PORT"  envDefault:"8080"`
+	DBHost          string   `env:"BEACON_DB_HOST"`
+	DBName          string   `env:"BEACON_DB_NAME"          envDefault:"beacon_db"`
+	DBUser          string   `env:"BEACON_DB_USER"          envDefault:"beacon_controller"`
+	DBPass          string   `env:"BEACON_DB_PASSWORD"`
+	DBPort          int      `env:"BEACON_DB_PORT"          envDefault:"5432"`
+	ShutdownTimeout int      `env:"BEACON_SHUTDOWN_TIMEOUT" envDefault:"30"`
+	EtcdEndpoints   []string `env:"BEACON_ETCD_ENDPOINTS"`
 }
 
 func (c *serviceConfig) Validate() error {
@@ -65,7 +66,7 @@ func main() {
 func start(ctx context.Context, w io.Writer) error {
 	var err error
 
-	logger := logger.NewJSONLogger(slog.LevelInfo, w)
+	log := logger.NewJSONLogger(slog.LevelInfo, w)
 
 	cfg, err := loadConfig()
 	if err != nil {
@@ -84,28 +85,21 @@ func start(ctx context.Context, w io.Writer) error {
 	}
 	defer db.Close()
 
-	messaging, err := setupMessaging(cfg.RabbitHost)
-	if err != nil {
-		return fmt.Errorf("error setting up messaging: %w", err)
-	}
-	defer messaging.Close()
-
 	repoRegistry := repository.NewPostgresRepositoryRegistry(db)
 	zoneService := zone.NewService(repoRegistry)
 
-	syncerCtx, syncerCancel := context.WithCancel(ctx)
-	syncer, err := syncer.New(syncer.Config{
-		Registry:            repoRegistry,
-		Publisher:           messaging.Publisher,
-		Consumer:            messaging.Consumer,
-		PollInterval:        time.Second * 10, //nolint:mnd,nolintlint
-		AcknowledgmentQueue: acknowledgmentQueue,
-		Logger:              logger,
+	kvstore, err := kvstore.NewEtcdClient(cfg.EtcdEndpoints, kvstore.Scope{
+		Namespace: "beacon",
 	})
 	if err != nil {
-		syncerCancel()
-		return fmt.Errorf("error creating syncer: %w", err)
+		return fmt.Errorf("error creating etcd client: %w", err)
 	}
+	defer kvstore.Close()
+
+	workerCtx, workerCancel := context.WithCancel(ctx)
+	defer workerCancel()
+
+	worker := worker.New(repoRegistry, kvstore, log)
 
 	var g run.Group
 	{
@@ -135,13 +129,15 @@ func start(ctx context.Context, w io.Writer) error {
 		)
 	}
 	{
-		g.Add(func() error {
-			return syncer.Start(syncerCtx)
-		}, func(_ error) {
-			syncerCancel()
-		})
+		g.Add(
+			func() error {
+				return worker.Start(workerCtx)
+			},
+			func(_ error) {
+				workerCancel()
+			},
+		)
 	}
-
 	g.Add(run.SignalHandler(ctx, os.Interrupt))
 
 	return g.Run()

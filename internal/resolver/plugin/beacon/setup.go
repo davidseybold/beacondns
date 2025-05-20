@@ -12,7 +12,6 @@ import (
 
 	"github.com/davidseybold/beacondns/internal/db/kvstore"
 	"github.com/davidseybold/beacondns/internal/logger"
-	"github.com/davidseybold/beacondns/internal/messaging"
 )
 
 //nolint:gochecknoinits // used for plugin registration
@@ -42,77 +41,30 @@ func (b *Beacon) OnStartup() error {
 	log.Info("starting beacon")
 	b.logger.Info("starting beacon")
 
-	store, err := kvstore.NewBadgerKVStore(b.dbPath)
-	if err != nil {
-		return fmt.Errorf("error creating Badger KV store: %w", err)
-	}
-	b.store = store
-
-	publishConn, err := messaging.DialAMQP(b.rabbitmqConnString)
-	if err != nil {
-		return fmt.Errorf("error creating RabbitMQ connection: %w", err)
-	}
-
-	publisher, err := messaging.NewRabbitMQPublisher(publishConn, "beacon")
-	if err != nil {
-		return fmt.Errorf("error creating RabbitMQ publisher: %w", err)
-	}
-
-	consumeConn, err := messaging.DialAMQP(b.rabbitmqConnString)
-	if err != nil {
-		return fmt.Errorf("error creating RabbitMQ connection: %w", err)
-	}
-
-	consumer := messaging.NewRabbitMQConsumer(fmt.Sprintf("resolver.%s", b.hostName), consumeConn)
-
-	err = messaging.SetupAMQPTopology(consumeConn, messaging.RabbitMQTopology{
-		Exchange: messaging.RabbitMQExchange{
-			Name: b.rabbitmqExchange,
-			Kind: "topic",
-		},
-		Queues: []string{
-			b.changeQueue,
-		},
+	etcdClient, err := kvstore.NewEtcdClient(b.config.EtcdEndpoints, kvstore.Scope{
+		Namespace: "beacon",
 	})
 	if err != nil {
-		return fmt.Errorf("error setting up RabbitMQ topology: %w", err)
+		return fmt.Errorf("error creating etcd client: %w", err)
 	}
 
-	changeListener := NewChangeListener(ChangeListenerConfig{
-		Consumer:     consumer,
-		Publisher:    publisher,
-		ChangeQueue:  b.changeQueue,
-		OnZoneChange: b.handleZoneChange,
-		Logger:       b.logger,
-	})
+	b.store = etcdClient
 
-	consumerCtx, consumerCancel := context.WithCancel(context.Background())
+	watchCtx, watchCancel := context.WithCancel(context.Background())
 
-	go func() {
-		runErr := changeListener.Run(consumerCtx)
-		if runErr != nil && runErr != context.Canceled {
-			log.Error("error consuming messages: %w", runErr)
-		}
-	}()
+	zoneChangeChan, err := b.store.Watch(watchCtx, "/zones")
+	if err != nil {
+		watchCancel()
+		return fmt.Errorf("error watching zones: %w", err)
+	}
+
+	go b.listenForZoneChanges(watchCtx, zoneChangeChan)
 
 	b.close = func() error {
-		consumerCancel()
-
-		var errs []error
-		if publishErr := publishConn.Close(); publishErr != nil {
-			errs = append(errs, fmt.Errorf("publish connection: %w", publishErr))
-		}
-
-		if consumeErr := consumeConn.Close(); consumeErr != nil {
-			errs = append(errs, fmt.Errorf("consume connection: %w", consumeErr))
-		}
+		watchCancel()
 
 		if storeErr := b.store.Close(); storeErr != nil {
-			errs = append(errs, fmt.Errorf("store: %w", storeErr))
-		}
-
-		if len(errs) > 0 {
-			return fmt.Errorf("failed to close: %v", errs)
+			return fmt.Errorf("store: %w", storeErr)
 		}
 
 		return nil
@@ -131,22 +83,6 @@ func (b *Beacon) OnFinalShutdown() error {
 	return b.close()
 }
 
-func (b *Beacon) loadZones() error {
-	log.Info("loading zones")
-	items, err := b.store.GetPrefix([]byte("/zones"))
-	if err != nil {
-		return fmt.Errorf("error getting zones: %w", err)
-	}
-
-	log.Info("loading zones", "count", len(items))
-
-	for _, item := range items {
-		log.Info("loading zone", "zone", string(item.Value))
-		b.zoneTrie.AddZone(string(item.Value))
-	}
-	return nil
-}
-
 func beaconParse(c *caddy.Controller) (*Beacon, error) {
 	if c.Next() {
 		if c.NextBlock() {
@@ -162,33 +98,19 @@ func parseAttributes(c *caddy.Controller) (*Beacon, error) {
 		logger:   logger.NewJSONLogger(slog.LevelInfo, os.Stdout),
 	}
 
+	config := BeaconConfig{}
+
 	for {
 		switch c.Val() {
-		case "hostname":
+		case "etcd_endpoints":
 			if !c.NextArg() {
 				return nil, c.ArgErr()
 			}
-			beacon.hostName = c.Val()
-		case "db_path":
-			if !c.NextArg() {
-				return nil, c.ArgErr()
+			endpoints := append([]string{c.Val()}, c.RemainingArgs()...)
+			if len(endpoints) == 0 {
+				return nil, c.Errf("etcd_endpoints requires at least one endpoint")
 			}
-			beacon.dbPath = c.Val()
-		case "rabbitmq_conn_string":
-			if !c.NextArg() {
-				return nil, c.ArgErr()
-			}
-			beacon.rabbitmqConnString = c.Val()
-		case "rabbitmq_exchange":
-			if !c.NextArg() {
-				return nil, c.ArgErr()
-			}
-			beacon.rabbitmqExchange = c.Val()
-		case "change_queue":
-			if !c.NextArg() {
-				return nil, c.ArgErr()
-			}
-			beacon.changeQueue = c.Val()
+			config.EtcdEndpoints = endpoints
 		default:
 			if c.Val() != "}" {
 				return nil, c.Errf("unknown property '%s'", c.Val())
@@ -198,6 +120,8 @@ func parseAttributes(c *caddy.Controller) (*Beacon, error) {
 			break
 		}
 	}
+
+	beacon.config = config
 
 	return beacon, nil
 }

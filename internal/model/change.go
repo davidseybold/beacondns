@@ -18,10 +18,6 @@ type ChangeTargetStatus string
 const (
 	ChangeStatusPending ChangeStatus = "PENDING"
 	ChangeStatusInSync  ChangeStatus = "INSYNC"
-
-	ChangeTargetStatusPending ChangeTargetStatus = "PENDING"
-	ChangeTargetStatusSent    ChangeTargetStatus = "SENT"
-	ChangeTargetStatusInSync  ChangeTargetStatus = "INSYNC"
 )
 
 type ZoneChangeAction string
@@ -38,33 +34,26 @@ const (
 )
 
 type Change struct {
-	ID          uuid.UUID      `json:"id"`
-	Type        ChangeType     `json:"type"`
-	ZoneChange  *ZoneChange    `json:"zoneChange,omitempty"`
-	Targets     []ChangeTarget `json:"targets,omitempty"`
-	SubmittedAt *time.Time     `json:"submittedAt,omitempty"`
+	ID         uuid.UUID    `json:"id"`
+	Type       ChangeType   `json:"type"`
+	ZoneChange *ZoneChange  `json:"zoneChange,omitempty"`
+	Status     ChangeStatus `json:"status"`
+
+	SubmittedAt *time.Time `json:"submittedAt,omitempty"`
 }
 
-func NewChange(t ChangeType) Change {
+func NewChange(t ChangeType, status ChangeStatus) Change {
 	return Change{
-		ID:   uuid.New(),
-		Type: t,
+		ID:     uuid.New(),
+		Type:   t,
+		Status: status,
 	}
 }
 
-func NewChangeWithZoneChange(zoneChange ZoneChange) Change {
-	ch := NewChange(ChangeTypeZone)
+func NewChangeWithZoneChange(zoneChange ZoneChange, status ChangeStatus) Change {
+	ch := NewChange(ChangeTypeZone, status)
 	ch.ZoneChange = &zoneChange
 	return ch
-}
-
-func (c *Change) Status() ChangeStatus {
-	for _, target := range c.Targets {
-		if target.Status == ChangeTargetStatusPending {
-			return ChangeStatusPending
-		}
-	}
-	return ChangeStatusInSync
 }
 
 type ZoneChange struct {
@@ -92,10 +81,4 @@ func NewResourceRecordSetChange(action RRSetChangeAction, resourceRecordSet Reso
 		Action:            action,
 		ResourceRecordSet: resourceRecordSet,
 	}
-}
-
-type ChangeTarget struct {
-	Server   Server             `json:"server"`
-	Status   ChangeTargetStatus `json:"status"`
-	SyncedAt *time.Time         `json:"syncedAt,omitempty"`
 }

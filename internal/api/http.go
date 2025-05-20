@@ -82,7 +82,7 @@ func (h *handler) CreateZone(c *gin.Context) {
 	resp := CreateZoneResponse{
 		ChangeInfo: ChangeInfo{
 			ID:          res.Change.ID.String(),
-			Status:      string(res.Change.Status()),
+			Status:      string(res.Change.Status),
 			SubmittedAt: res.Change.SubmittedAt.Format("2006-01-02T15:04:05Z"),
 		},
 		Zone: Zone{

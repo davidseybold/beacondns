@@ -29,3 +29,6 @@ Thumbs.db
 .env
 
 *.pb.go
+
+# Etcd data
+default.etcd/*

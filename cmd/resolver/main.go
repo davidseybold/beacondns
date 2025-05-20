@@ -14,16 +14,10 @@ import (
 	"github.com/davidseybold/beacondns/internal/resolver"
 )
 
-const (
-	exchangeName = "beacon"
-)
-
 type config struct {
-	DBPath       string        `env:"BEACON_DB_PATH"       envDefault:"/var/lib/beacon"`
-	RabbitHost   string        `env:"BEACON_RABBITMQ_HOST"`
-	Host         string        `env:"BEACON_HOSTNAME"`
-	ResolverType resolver.Type `env:"BEACON_RESOLVER_TYPE"`
-	Forwarder    string        `env:"BEACON_FORWARDER"`
+	EtcdEndpoints []string      `env:"BEACON_ETCD_ENDPOINTS" envSeparator:","`
+	ResolverType  resolver.Type `env:"BEACON_RESOLVER_TYPE"`
+	Forwarder     string        `env:"BEACON_FORWARDER"`
 }
 
 func (c *config) Validate() error {
@@ -44,17 +38,11 @@ func start(ctx context.Context, _ io.Writer) error {
 		return err
 	}
 
-	queueName := fmt.Sprintf("server.resolver.%s", cfg.Host)
-
 	resolverCtx, cancelResolver := context.WithCancel(ctx)
 	dnsresolver, err := resolver.New(&resolver.Config{
-		Type:               cfg.ResolverType,
-		Forwarder:          &cfg.Forwarder,
-		HostName:           cfg.Host,
-		DBPath:             cfg.DBPath,
-		RabbitMQConnString: cfg.RabbitHost,
-		RabbitExchange:     exchangeName,
-		ChangeQueue:        queueName,
+		Type:          cfg.ResolverType,
+		Forwarder:     &cfg.Forwarder,
+		EtcdEndpoints: cfg.EtcdEndpoints,
 	})
 	if err != nil {
 		cancelResolver()

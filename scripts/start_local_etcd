@@ -1,0 +1,3 @@
+#!/bin/bash
+
+ETCD_UNSUPPORTED_ARCH="arm64" /opt/homebrew/opt/etcd/bin/etcd

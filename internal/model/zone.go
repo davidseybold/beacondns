@@ -20,19 +20,27 @@ const (
 	RRTypePTR   RRType = "PTR"
 )
 
-type Zone struct {
+type ZoneInfo struct {
 	ID   uuid.UUID `json:"id"`
 	Name string    `json:"name"`
 }
 
+type Zone struct {
+	ZoneInfo
+	ResourceRecordSets []ResourceRecordSet `json:"resourceRecordSets"`
+}
+
 func NewZone(name string) Zone {
 	return Zone{
-		ID:   uuid.New(),
-		Name: name,
+		ZoneInfo: ZoneInfo{
+			ID:   uuid.New(),
+			Name: name,
+		},
 	}
 }
 
 type ResourceRecordSet struct {
+	ID              uuid.UUID        `json:"id"`
 	Name            string           `json:"name"`
 	Type            RRType           `json:"type"`
 	TTL             uint32           `json:"ttl"`
@@ -55,6 +63,7 @@ func NewSOA(
 	soaMinimum uint,
 ) ResourceRecordSet {
 	return ResourceRecordSet{
+		ID:   uuid.New(),
 		Name: zoneName,
 		Type: RRTypeSOA,
 		TTL:  ttl,
@@ -84,6 +93,7 @@ func NewNS(zoneName string, ttl uint32, nameServerNames []string) ResourceRecord
 	}
 
 	return ResourceRecordSet{
+		ID:              uuid.New(),
 		Name:            zoneName,
 		Type:            RRTypeNS,
 		TTL:             ttl,

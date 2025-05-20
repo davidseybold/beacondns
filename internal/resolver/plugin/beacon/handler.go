@@ -3,13 +3,10 @@ package beacon
 import (
 	"context"
 	"errors"
-	"fmt"
 
 	"github.com/coredns/coredns/plugin"
 	"github.com/coredns/coredns/request"
 	"github.com/miekg/dns"
-
-	"github.com/davidseybold/beacondns/internal/model"
 )
 
 func (b *Beacon) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
@@ -25,30 +22,9 @@ func (b *Beacon) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg)
 		return plugin.NextOrFailure(b.Name(), b.Next, ctx, w, r)
 	}
 
-	rrset, ok := b.lookup(zone, qname, model.RRType(state.Type()))
+	answers, ok := b.lookup(zone, qname, dns.Type(qtype))
 	if !ok {
-		return b.errorResponse(state, dns.RcodeServerFailure, errors.New("no rrset found"))
-	}
-
-	var answers []dns.RR
-	var extras []dns.RR
-	switch qtype {
-	case dns.TypeA:
-		answers, extras = b.A(rrset)
-	case dns.TypeAAAA:
-		answers, extras = b.AAAA(rrset)
-	case dns.TypeCNAME:
-		answers, extras = b.CNAME(rrset)
-	case dns.TypeNS:
-		answers, extras = b.NS(rrset)
-	case dns.TypeSOA:
-		answers, extras = b.SOA(rrset)
-	default:
-		return b.errorResponse(
-			state,
-			dns.RcodeNotImplemented,
-			fmt.Errorf("unsupported query type: %s", state.Type()),
-		)
+		return b.errorResponse(state, dns.RcodeServerFailure, errors.New("no answers found"))
 	}
 
 	m := new(dns.Msg)
@@ -56,7 +32,6 @@ func (b *Beacon) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg)
 	m.Authoritative, m.RecursionAvailable, m.Compress = true, false, true
 
 	m.Answer = append(m.Answer, answers...)
-	m.Extra = append(m.Extra, extras...)
 
 	state.SizeAndDo(m)
 	m = state.Scrub(m)

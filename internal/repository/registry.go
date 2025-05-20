@@ -15,11 +15,10 @@ import (
 type Registry interface {
 	GetZoneRepository() ZoneRepository
 	GetChangeRepository() ChangeRepository
-	GetServerRepository() ServerRepository
 }
 
 type Transactor interface {
-	WithinTransaction(ctx context.Context, txFunc TxFunc) (any, error)
+	InTx(ctx context.Context, txFunc TxFunc) (any, error)
 }
 
 type TransactorRegistry interface {
@@ -33,6 +32,8 @@ type PostgresRepositoryRegistry struct {
 	db      postgres.PgxPool
 	queryer postgres.Queryer
 }
+
+var _ TransactorRegistry = (*PostgresRepositoryRegistry)(nil)
 
 func NewPostgresRepositoryRegistry(db postgres.PgxPool) *PostgresRepositoryRegistry {
 	return &PostgresRepositoryRegistry{
@@ -50,11 +51,6 @@ func (r *PostgresRepositoryRegistry) GetChangeRepository() ChangeRepository {
 	return &PostgresChangeRepository{db}
 }
 
-func (r *PostgresRepositoryRegistry) GetServerRepository() ServerRepository {
-	db := r.getQueryer()
-	return &PostgresServerRepository{db}
-}
-
 func (r *PostgresRepositoryRegistry) getQueryer() postgres.Queryer {
 	if r.queryer != nil {
 		return r.queryer
@@ -62,7 +58,7 @@ func (r *PostgresRepositoryRegistry) getQueryer() postgres.Queryer {
 	return r.db
 }
 
-func (r *PostgresRepositoryRegistry) WithinTransaction(ctx context.Context, txFunc TxFunc) (any, error) {
+func (r *PostgresRepositoryRegistry) InTx(ctx context.Context, txFunc TxFunc) (any, error) {
 	registry := r
 
 	var tx postgres.Tx

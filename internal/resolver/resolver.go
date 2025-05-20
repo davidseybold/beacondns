@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"text/template"
 
 	"github.com/coredns/caddy"
@@ -83,38 +84,14 @@ const (
 )
 
 type Config struct {
-	Type               Type
-	Forwarder          *string
-	HostName           string
-	DBPath             string
-	RabbitMQConnString string
-	RabbitExchange     string
-	ChangeQueue        string
+	Type          Type
+	Forwarder     *string
+	EtcdEndpoints []string
 }
 
 func (c *Config) Validate() error {
 	if c.Type == TypeForwarder && c.Forwarder == nil {
 		return errors.New("forwarder is required when resolver type is forwarder")
-	}
-
-	if c.RabbitExchange == "" {
-		return errors.New("rabbitmq_exchange is required")
-	}
-
-	if c.ChangeQueue == "" {
-		return errors.New("change_queue is required")
-	}
-
-	if c.RabbitMQConnString == "" {
-		return errors.New("rabbitmq_conn_string is required")
-	}
-
-	if c.HostName == "" {
-		return errors.New("hostname is required")
-	}
-
-	if c.DBPath == "" {
-		return errors.New("db_path is required")
 	}
 
 	return nil
@@ -169,15 +146,14 @@ const corefile = `
     log
 	debug
     beacon {
-        hostname {{ .HostName }}
-        db_path {{ .DBPath }}
-        rabbitmq_conn_string {{ .RabbitMQConnString }}
-        rabbitmq_exchange {{ .RabbitExchange }}
-        change_queue {{ .ChangeQueue }}
+		etcd_endpoints {{ join .EtcdEndpoints " " }}
+	}
 }`
 
 //nolint:gochecknoglobals // used for template parsing
-var coreTemplate = template.Must(template.New("corefile").Parse(corefile))
+var coreTemplate = template.Must(template.New("corefile").Funcs(template.FuncMap{
+	"join": strings.Join,
+}).Parse(corefile))
 
 func loadCaddyInput(config Config) (*caddy.CaddyfileInput, error) {
 	var corefile bytes.Buffer
