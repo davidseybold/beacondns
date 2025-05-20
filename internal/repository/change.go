@@ -135,7 +135,7 @@ func (r *PostgresChangeRepository) GetChangeToProcess(ctx context.Context) (*mod
 	var changeData []byte
 	err := row.Scan(&change.ID, &change.Type, &changeData, &change.SubmittedAt)
 	if err != nil && errors.Is(err, sql.ErrNoRows) {
-		return nil, nil
+		return nil, ErrNotFound
 	} else if err != nil {
 		return nil, fmt.Errorf("failed to scan change row: %w", err)
 	}

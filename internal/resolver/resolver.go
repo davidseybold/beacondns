@@ -13,16 +13,17 @@ import (
 	// Used for plugin registration.
 
 	"github.com/coredns/coredns/core/dnsserver"
-	_ "github.com/coredns/coredns/plugin/any"
-	_ "github.com/coredns/coredns/plugin/errors"
-	_ "github.com/coredns/coredns/plugin/forward"
-	_ "github.com/coredns/coredns/plugin/log"
+	_ "github.com/coredns/coredns/plugin/any"     // used for plugin registration.
+	_ "github.com/coredns/coredns/plugin/errors"  // used for plugin registration.
+	_ "github.com/coredns/coredns/plugin/forward" // used for plugin registration.
+	_ "github.com/coredns/coredns/plugin/log"     // used for plugin registration.
 
-	// Used for plugin registration.
-	_ "github.com/davidseybold/beacondns/internal/resolver/plugin/beacon"
+	_ "github.com/davidseybold/beacondns/internal/resolver/plugin/beacon" // used for plugin registration.
 )
 
+//nolint:gochecknoinits // used for plugin registration.
 func init() {
+	//nolint:reassign // used to register custom plugin in addition to the default ones.
 	dnsserver.Directives = []string{
 		"root",
 		"metadata",

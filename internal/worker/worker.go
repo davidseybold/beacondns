@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -39,7 +40,7 @@ func (w *Worker) Start(ctx context.Context) error {
 		case <-ticker.C:
 			err := w.processChange(ctx)
 			if err != nil {
-				w.logger.Error("failed to process change", "error", err)
+				w.logger.ErrorContext(ctx, "failed to process change", "error", err)
 			}
 		case <-ctx.Done():
 			return ctx.Err()
@@ -50,16 +51,17 @@ func (w *Worker) Start(ctx context.Context) error {
 func (w *Worker) processChange(ctx context.Context) error {
 	_, err := w.registry.InTx(ctx, func(ctx context.Context, r repository.Registry) (any, error) {
 		change, err := r.GetChangeRepository().GetChangeToProcess(ctx)
-		if err != nil {
+		if err != nil && errors.Is(err, repository.ErrNotFound) {
+			return true, nil
+		} else if err != nil {
 			return nil, fmt.Errorf("failed to get change to process: %w", err)
 		}
 
 		if change == nil {
-			return nil, nil
+			return true, nil
 		}
 
-		switch change.Type {
-		case model.ChangeTypeZone:
+		if change.Type == model.ChangeTypeZone {
 			err = w.processZoneChange(ctx, change)
 			if err != nil {
 				return nil, fmt.Errorf("failed to process zone change: %w", err)
@@ -73,7 +75,7 @@ func (w *Worker) processChange(ctx context.Context) error {
 			return nil, fmt.Errorf("failed to update change status: %w", err)
 		}
 
-		return nil, nil
+		return true, nil
 	})
 
 	if err != nil {

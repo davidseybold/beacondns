@@ -14,10 +14,6 @@ const (
 	RRTypeA     RRType = "A"
 	RRTypeAAAA  RRType = "AAAA"
 	RRTypeCNAME RRType = "CNAME"
-	RRTypeMX    RRType = "MX"
-	RRTypeTXT   RRType = "TXT"
-	RRTypeSRV   RRType = "SRV"
-	RRTypePTR   RRType = "PTR"
 )
 
 type ZoneInfo struct {

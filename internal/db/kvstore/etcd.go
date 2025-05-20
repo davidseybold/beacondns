@@ -8,6 +8,10 @@ import (
 	"go.etcd.io/etcd/client/v3/namespace"
 )
 
+const (
+	etcdDialTimeout = 5 * time.Second
+)
+
 type EtcdClient struct {
 	etcdClient *clientv3.Client
 }
@@ -23,7 +27,7 @@ var _ Transaction = (*etcdTransaction)(nil)
 func NewEtcdClient(endpoints []string, scope Scope) (*EtcdClient, error) {
 	etcdClient, err := clientv3.New(clientv3.Config{
 		Endpoints:   endpoints,
-		DialTimeout: 5 * time.Second,
+		DialTimeout: etcdDialTimeout,
 	})
 	if err != nil {
 		return nil, err

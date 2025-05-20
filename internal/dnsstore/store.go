@@ -29,7 +29,7 @@ type DNSStore interface {
 }
 
 type ZoneTransaction interface {
-	CreateZoneMarker(ctx context.Context) ZoneTransaction
+	CreateZoneMarker() ZoneTransaction
 	PutRRSet(rrName string, rrType string, rrset []dns.RR) ZoneTransaction
 	DeleteRRSet(rrName string, rrType string) ZoneTransaction
 	Commit() error
@@ -136,7 +136,7 @@ func (s *Store) WatchForZoneChanges(ctx context.Context) (<-chan kvstore.Event, 
 	return s.kvstore.Watch(ctx, keyPrefixZones, kvstore.WithPrefix())
 }
 
-func (t *zoneTransaction) CreateZoneMarker(ctx context.Context) ZoneTransaction {
+func (t *zoneTransaction) CreateZoneMarker() ZoneTransaction {
 	t.tx.Put(createZonesKey(t.zone), []byte(t.zone))
 	return t
 }

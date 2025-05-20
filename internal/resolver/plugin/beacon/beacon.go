@@ -2,6 +2,7 @@ package beacon
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -16,14 +17,14 @@ import (
 //nolint:gochecknoglobals // used for logging
 var log = clog.NewWithPlugin("beacon")
 
-type BeaconConfig struct {
+type Config struct {
 	EtcdEndpoints []string
 }
 
 type Beacon struct {
 	Next plugin.Handler
 
-	config BeaconConfig
+	config Config
 
 	store    dnsstore.DNSStore
 	zoneTrie *ZoneTrie
@@ -35,7 +36,7 @@ var _ plugin.Handler = (*Beacon)(nil)
 
 func (b *Beacon) lookup(zoneName, rrName string, t dns.Type) ([]dns.RR, bool) {
 	val, err := b.store.GetRRSet(context.Background(), zoneName, rrName, t.String())
-	if err != nil && err == dnsstore.ErrNotFound {
+	if err != nil && errors.Is(err, dnsstore.ErrNotFound) {
 		log.Info("record not found", " zone ", zoneName, " rrName ", rrName, " type ", t)
 		return nil, false
 	} else if err != nil {
@@ -53,9 +54,10 @@ func (b *Beacon) listenForZoneChanges(ctx context.Context, ch <-chan kvstore.Eve
 			return
 		case event := <-ch:
 			log.Info("zone change detected")
-			if event.Type == kvstore.EventTypePut {
+			switch event.Type {
+			case kvstore.EventTypePut:
 				b.zoneTrie.AddZone(event.Key)
-			} else if event.Type == kvstore.EventTypeDelete {
+			case kvstore.EventTypeDelete:
 				b.zoneTrie.RemoveZone(event.Key)
 			}
 		}

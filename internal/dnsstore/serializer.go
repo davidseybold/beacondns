@@ -5,6 +5,10 @@ import (
 	"github.com/vmihailenco/msgpack/v5"
 )
 
+const (
+	rrBufSize = 4096
+)
+
 type rrSet struct {
 	RRs []dns.RR `msg:"rrs"`
 }
@@ -12,7 +16,7 @@ type rrSet struct {
 func (s *rrSet) EncodeMsgpack(enc *msgpack.Encoder) error {
 	data := make([][]byte, len(s.RRs))
 	for i, rr := range s.RRs {
-		buf := make([]byte, 4096)
+		buf := make([]byte, rrBufSize)
 		n, err := dns.PackRR(rr, buf, 0, nil, false)
 		if err != nil {
 			return err
@@ -31,9 +35,9 @@ func (s *rrSet) DecodeMsgpack(dec *msgpack.Decoder) error {
 
 	s.RRs = make([]dns.RR, len(data))
 	for i, d := range data {
-		rr, _, err := dns.UnpackRR(d, 0)
-		if err != nil {
-			return err
+		rr, _, unpackErr := dns.UnpackRR(d, 0)
+		if unpackErr != nil {
+			return unpackErr
 		}
 		s.RRs[i] = rr
 	}

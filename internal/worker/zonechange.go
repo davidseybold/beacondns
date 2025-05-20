@@ -12,8 +12,11 @@ import (
 	"github.com/davidseybold/beacondns/internal/model"
 )
 
-func (w *Worker) processZoneChange(ctx context.Context, change *model.Change) error {
+const (
+	soaRecordFieldNumber = 7
+)
 
+func (w *Worker) processZoneChange(ctx context.Context, change *model.Change) error {
 	zoneChange := change.ZoneChange
 
 	if zoneChange.Action == model.ZoneChangeActionDelete {
@@ -22,7 +25,7 @@ func (w *Worker) processZoneChange(ctx context.Context, change *model.Change) er
 
 	tx := w.store.ZoneTxn(ctx, zoneChange.ZoneName)
 
-	tx.CreateZoneMarker(ctx)
+	tx.CreateZoneMarker()
 
 	for _, ch := range zoneChange.Changes {
 		processResourceRecordSetChange(tx, ch)
@@ -127,7 +130,7 @@ func newSOARecordSet(rrset model.ResourceRecordSet) []dns.RR {
 		}
 
 		parts := strings.Fields(rr.Value)
-		if len(parts) != 7 {
+		if len(parts) != soaRecordFieldNumber {
 			continue
 		}
 
@@ -135,11 +138,11 @@ func newSOARecordSet(rrset model.ResourceRecordSet) []dns.RR {
 		r.Mbox = dns.Fqdn(parts[1])
 		serial, _ := strconv.ParseUint(parts[2], 10, 32)
 		r.Serial = uint32(serial)
-		refresh, _ := strconv.ParseInt(parts[3], 10, 32)
+		refresh, _ := strconv.ParseUint(parts[3], 10, 32)
 		r.Refresh = uint32(refresh)
-		retry, _ := strconv.ParseInt(parts[4], 10, 32)
+		retry, _ := strconv.ParseUint(parts[4], 10, 32)
 		r.Retry = uint32(retry)
-		expire, _ := strconv.ParseInt(parts[5], 10, 32)
+		expire, _ := strconv.ParseUint(parts[5], 10, 32)
 		r.Expire = uint32(expire)
 		minttl, _ := strconv.ParseUint(parts[6], 10, 32)
 		r.Minttl = uint32(minttl)

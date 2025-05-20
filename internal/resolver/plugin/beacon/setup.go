@@ -99,7 +99,7 @@ func parseAttributes(c *caddy.Controller) (*Beacon, error) {
 		logger:   logger.NewJSONLogger(slog.LevelInfo, os.Stdout),
 	}
 
-	config := BeaconConfig{}
+	config := Config{}
 
 	for {
 		switch c.Val() {

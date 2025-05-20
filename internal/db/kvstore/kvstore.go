@@ -55,8 +55,7 @@ type Item struct {
 type EventType int
 
 const (
-	EventTypeUnknown EventType = iota
-	EventTypePut
+	EventTypePut EventType = iota
 	EventTypeDelete
 )
 
