@@ -1,15 +1,15 @@
-package dnsserializer
+package dnsstore
 
 import (
 	"github.com/miekg/dns"
 	"github.com/vmihailenco/msgpack/v5"
 )
 
-type RRSet struct {
+type rrSet struct {
 	RRs []dns.RR `msg:"rrs"`
 }
 
-func (s *RRSet) EncodeMsgpack(enc *msgpack.Encoder) error {
+func (s *rrSet) EncodeMsgpack(enc *msgpack.Encoder) error {
 	data := make([][]byte, len(s.RRs))
 	for i, rr := range s.RRs {
 		buf := make([]byte, 4096)
@@ -22,7 +22,7 @@ func (s *RRSet) EncodeMsgpack(enc *msgpack.Encoder) error {
 	return enc.Encode(data)
 }
 
-func (s *RRSet) DecodeMsgpack(dec *msgpack.Decoder) error {
+func (s *rrSet) DecodeMsgpack(dec *msgpack.Decoder) error {
 	data := make([][]byte, 0)
 	err := dec.Decode(&data)
 	if err != nil {
@@ -40,12 +40,12 @@ func (s *RRSet) DecodeMsgpack(dec *msgpack.Decoder) error {
 	return nil
 }
 
-func MarshalRRSet(rrset *RRSet) ([]byte, error) {
+func marshalRRSet(rrset *rrSet) ([]byte, error) {
 	return msgpack.Marshal(rrset)
 }
 
-func UnmarshalRRSet(data []byte) (*RRSet, error) {
-	rrset := &RRSet{}
+func unmarshalRRSet(data []byte) (*rrSet, error) {
+	rrset := &rrSet{}
 	err := msgpack.Unmarshal(data, rrset)
 	if err != nil {
 		return nil, err

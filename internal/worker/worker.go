@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/davidseybold/beacondns/internal/db/kvstore"
+	"github.com/davidseybold/beacondns/internal/dnsstore"
 	"github.com/davidseybold/beacondns/internal/logger"
 	"github.com/davidseybold/beacondns/internal/model"
 	"github.com/davidseybold/beacondns/internal/repository"
@@ -15,17 +15,17 @@ import (
 type Worker struct {
 	logger   *slog.Logger
 	registry repository.TransactorRegistry
-	kv       kvstore.KVStore
+	store    dnsstore.DNSStore
 }
 
-func New(registry repository.TransactorRegistry, kv kvstore.KVStore, l *slog.Logger) *Worker {
+func New(registry repository.TransactorRegistry, store dnsstore.DNSStore, l *slog.Logger) *Worker {
 	if l == nil {
 		l = logger.NewDiscardLogger()
 	}
 
 	return &Worker{
 		registry: registry,
-		kv:       kv,
+		store:    store,
 		logger:   l,
 	}
 }
@@ -58,8 +58,6 @@ func (w *Worker) processChange(ctx context.Context) error {
 			return nil, nil
 		}
 
-		w.logger.Info("processing change", "change", change)
-
 		switch change.Type {
 		case model.ChangeTypeZone:
 			err = w.processZoneChange(ctx, change)
@@ -68,7 +66,7 @@ func (w *Worker) processChange(ctx context.Context) error {
 			}
 		}
 
-		w.logger.Info("processed change", "change", change)
+		w.logger.Info("processed change", "change", change.ZoneChange.ZoneName)
 
 		err = r.GetChangeRepository().UpdateChangeStatus(ctx, change.ID, model.ChangeStatusInSync)
 		if err != nil {

@@ -7,15 +7,30 @@ import (
 )
 
 type KVStore interface {
-	Get(ctx context.Context, key string) ([]byte, error)
-	GetPrefix(ctx context.Context, prefix string) ([]Item, error)
-	Put(ctx context.Context, key string, value []byte) error
-	Delete(ctx context.Context, key string) error
-	DeletePrefix(ctx context.Context, prefix string) error
-	Txn(ctx context.Context, ops []Op) error
-	Watch(ctx context.Context, key string) (<-chan Event, error)
-	WatchPrefix(ctx context.Context, prefix string) (<-chan Event, error)
+	Get(ctx context.Context, key string, opts ...Option) ([]Item, error)
+	Put(ctx context.Context, key string, value []byte, opts ...Option) error
+	Delete(ctx context.Context, key string, opts ...Option) error
+	Watch(ctx context.Context, key string, opts ...Option) (<-chan Event, error)
 	Close() error
+	Txn(ctx context.Context) Transaction
+}
+
+type Transaction interface {
+	Put(key string, value []byte, opts ...Option) Transaction
+	Delete(key string, opts ...Option) Transaction
+	Commit() error
+}
+
+type options struct {
+	Prefix bool
+}
+
+type Option func(*options)
+
+func WithPrefix() Option {
+	return func(o *options) {
+		o.Prefix = true
+	}
 }
 
 type Action int
@@ -26,9 +41,10 @@ const (
 )
 
 type Op struct {
-	Action Action
-	Key    string
-	Value  []byte
+	Action   Action
+	Key      string
+	Value    []byte
+	IsPrefix bool
 }
 
 type Item struct {

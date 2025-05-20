@@ -11,6 +11,7 @@ import (
 	"github.com/coredns/coredns/plugin"
 
 	"github.com/davidseybold/beacondns/internal/db/kvstore"
+	"github.com/davidseybold/beacondns/internal/dnsstore"
 	"github.com/davidseybold/beacondns/internal/logger"
 )
 
@@ -48,11 +49,11 @@ func (b *Beacon) OnStartup() error {
 		return fmt.Errorf("error creating etcd client: %w", err)
 	}
 
-	b.store = etcdClient
+	b.store = dnsstore.New(etcdClient)
 
 	watchCtx, watchCancel := context.WithCancel(context.Background())
 
-	zoneChangeChan, err := b.store.Watch(watchCtx, "/zones")
+	zoneChangeChan, err := b.store.WatchForZoneChanges(watchCtx)
 	if err != nil {
 		watchCancel()
 		return fmt.Errorf("error watching zones: %w", err)
@@ -63,8 +64,8 @@ func (b *Beacon) OnStartup() error {
 	b.close = func() error {
 		watchCancel()
 
-		if storeErr := b.store.Close(); storeErr != nil {
-			return fmt.Errorf("store: %w", storeErr)
+		if storeErr := etcdClient.Close(); storeErr != nil {
+			return fmt.Errorf("error closing etcd client: %w", storeErr)
 		}
 
 		return nil

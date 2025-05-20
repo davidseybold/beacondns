@@ -13,18 +13,8 @@ GO := go
 
 GOLANGCI_LINT := $(shell which golangci-lint 2>/dev/null)
 
-# Proto related
-PROTO_DIR := proto
-GEN_DIR := internal/proto
-PROTO_FILES := $(wildcard $(PROTO_DIR)/**/*.proto)
 
-# Buf-related
-BUF := buf
-BUF_CONFIG := buf.gen.yaml
-BUF_LINT := buf lint
-BUF_FORMAT := buf format
-
-.PHONY: all build-controller build-agent build-cli build run-controller run-agent run-cli test lint fmt clean install-tools generate-grpc buf-lint buf-format
+.PHONY: all build-controller build-agent build-cli build run-controller run-agent run-cli test lint fmt clean install-tools 
 
 # Install tools (golangci-lint, buf, and protoc-gen-go tools)
 install-tools:
@@ -32,34 +22,14 @@ ifndef GOLANGCI_LINT
 	@echo ">> Installing golangci-lint..."
 	brew install golangci-lint
 endif
-	@echo ">> Installing Buf..."
-	@brew install bufbuild/buf/buf || true # Try to install Buf via brew
-	@go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
-	@go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
-
-# Generate gRPC Go code from Proto files using Buf
-generate-grpc: $(PROTO_FILES)
-	@echo ">> Generating gRPC Go code using Buf..."
-	@buf generate $(PROTO_DIR) --template $(BUF_CONFIG)
-
-# Lint the Protos using Buf
-buf-lint:
-	@echo ">> Linting proto files using Buf..."
-	@buf lint $(PROTO_DIR)
-
-# Format the Protos using Buf
-buf-format:
-	@echo ">> Formatting proto files using Buf..."
-	@buf format -w $(PROTO_DIR)
-
 # Build Targets
 build: build-controller build-agent build-cli
 
-build-controller: generate-grpc
+build-controller:
 	@echo ">> Building controller..."
 	$(GO) build -o $(CONTROLLER_BIN) $(CONTROLLER_DIR)
 
-build-resolver: generate-grpc
+build-resolver:
 	@echo ">> Building resolver..."
 	$(GO) build -o $(RESOLVER_BIN) $(RESOLVER_DIR)
 
@@ -88,4 +58,3 @@ fmt:
 clean:
 	@echo ">> Cleaning binaries..."
 	rm -rf $(BIN_DIR)
-	rm -rf $(GEN_DIR)/grpc

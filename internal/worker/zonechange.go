@@ -2,93 +2,44 @@ package worker
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"strconv"
 	"strings"
 
 	"github.com/miekg/dns"
 
-	"github.com/davidseybold/beacondns/internal/db/kvstore"
-	"github.com/davidseybold/beacondns/internal/dnsserializer"
+	"github.com/davidseybold/beacondns/internal/dnsstore"
 	"github.com/davidseybold/beacondns/internal/model"
 )
 
 func (w *Worker) processZoneChange(ctx context.Context, change *model.Change) error {
-	ops := make([]kvstore.Op, 0)
 
 	zoneChange := change.ZoneChange
 
-	if zoneChange.Action == model.ZoneChangeActionCreate {
-		ops = append(ops, kvstore.Op{
-			Action: kvstore.ActionPut,
-			Key:    createZoneKey(zoneChange.ZoneName),
-			Value:  []byte(zoneChange.ZoneName),
-		})
-	} else if zoneChange.Action == model.ZoneChangeActionDelete {
-		ops = append(ops, kvstore.Op{
-			Action: kvstore.ActionDelete,
-			Key:    createZoneKey(zoneChange.ZoneName),
-		})
+	if zoneChange.Action == model.ZoneChangeActionDelete {
+		return w.store.DeleteZone(ctx, zoneChange.ZoneName)
 	}
+
+	tx := w.store.ZoneTxn(ctx, zoneChange.ZoneName)
+
+	tx.CreateZoneMarker(ctx)
 
 	for _, ch := range zoneChange.Changes {
-		op, err := processResourceRecordSetChange(zoneChange.ZoneName, ch)
-		if err != nil {
-			return err
-		}
-
-		if op != nil {
-			ops = append(ops, *op)
-		}
+		processResourceRecordSetChange(tx, ch)
 	}
 
-	err := w.kv.Txn(ctx, ops)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return tx.Commit()
 }
 
-func processResourceRecordSetChange(zoneName string, change model.ResourceRecordSetChange) (*kvstore.Op, error) {
+func processResourceRecordSetChange(tx dnsstore.ZoneTransaction, change model.ResourceRecordSetChange) {
 	if change.Action == model.RRSetChangeActionDelete {
-		return &kvstore.Op{
-			Action: kvstore.ActionDelete,
-			Key:    createResourceRecordKey(zoneName, change.ResourceRecordSet.Name, change.ResourceRecordSet.Type),
-		}, nil
+		tx.DeleteRRSet(change.ResourceRecordSet.Name, string(change.ResourceRecordSet.Type))
+		return
 	}
 
 	rrset := newDNSRecordSet(change.ResourceRecordSet)
 
-	dnsResp := dnsserializer.RRSet{
-		RRs: rrset,
-	}
-
-	packed, err := dnsserializer.MarshalRRSet(&dnsResp)
-	if err != nil {
-		return nil, err
-	}
-
-	if change.Action == model.RRSetChangeActionCreate || change.Action == model.RRSetChangeActionUpsert {
-		return &kvstore.Op{
-			Action: kvstore.ActionPut,
-			Key:    createResourceRecordKey(zoneName, change.ResourceRecordSet.Name, change.ResourceRecordSet.Type),
-			Value:  packed,
-		}, nil
-	}
-
-	return nil, nil
-}
-
-func createResourceRecordKey(zoneName string, rrName string, recordType model.RRType) string {
-	dnsRType := dns.StringToType[string(recordType)]
-	dnsRTypeStr := dns.TypeToString[uint16(dnsRType)]
-	return fmt.Sprintf("/zone/%s/recordset/%s/%s", zoneName, rrName, dnsRTypeStr)
-}
-
-func createZoneKey(zone string) string {
-	return fmt.Sprintf("/zones/%s", zone)
+	tx.PutRRSet(change.ResourceRecordSet.Name, string(change.ResourceRecordSet.Type), rrset)
 }
 
 func newDNSRecordSet(rrset model.ResourceRecordSet) []dns.RR {

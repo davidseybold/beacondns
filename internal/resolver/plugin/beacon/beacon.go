@@ -10,7 +10,7 @@ import (
 	"github.com/miekg/dns"
 
 	"github.com/davidseybold/beacondns/internal/db/kvstore"
-	"github.com/davidseybold/beacondns/internal/dnsserializer"
+	"github.com/davidseybold/beacondns/internal/dnsstore"
 )
 
 //nolint:gochecknoglobals // used for logging
@@ -25,7 +25,7 @@ type Beacon struct {
 
 	config BeaconConfig
 
-	store    kvstore.KVStore
+	store    dnsstore.DNSStore
 	zoneTrie *ZoneTrie
 	close    func() error
 	logger   *slog.Logger
@@ -34,9 +34,8 @@ type Beacon struct {
 var _ plugin.Handler = (*Beacon)(nil)
 
 func (b *Beacon) lookup(zoneName, rrName string, t dns.Type) ([]dns.RR, bool) {
-	log.Info(createRecordKey(zoneName, rrName, t.String()))
-	val, err := b.store.Get(context.Background(), createRecordKey(zoneName, rrName, t.String()))
-	if err != nil && err == kvstore.ErrNotFound {
+	val, err := b.store.GetRRSet(context.Background(), zoneName, rrName, t.String())
+	if err != nil && err == dnsstore.ErrNotFound {
 		log.Info("record not found", " zone ", zoneName, " rrName ", rrName, " type ", t)
 		return nil, false
 	} else if err != nil {
@@ -44,13 +43,7 @@ func (b *Beacon) lookup(zoneName, rrName string, t dns.Type) ([]dns.RR, bool) {
 		return nil, false
 	}
 
-	rrset, err := dnsserializer.UnmarshalRRSet(val)
-	if err != nil {
-		log.Error("error unmarshalling dns response", "error", err)
-		return nil, false
-	}
-
-	return rrset.RRs, true
+	return val, true
 }
 
 func (b *Beacon) listenForZoneChanges(ctx context.Context, ch <-chan kvstore.Event) {
@@ -71,20 +64,16 @@ func (b *Beacon) listenForZoneChanges(ctx context.Context, ch <-chan kvstore.Eve
 
 func (b *Beacon) loadZones() error {
 	log.Info("loading zones")
-	items, err := b.store.GetPrefix(context.Background(), "/zones")
+	zoneNames, err := b.store.GetZoneNames(context.Background())
 	if err != nil {
 		return fmt.Errorf("error getting zones: %w", err)
 	}
 
-	log.Info("loading zones ", " count ", len(items))
+	log.Info("loading zones ", " count ", len(zoneNames))
 
-	for _, item := range items {
-		log.Info("loading zone key ", string(item.Key))
-		b.zoneTrie.AddZone(string(item.Value))
+	for _, zoneName := range zoneNames {
+		b.zoneTrie.AddZone(zoneName)
 	}
-	return nil
-}
 
-func createRecordKey(zoneName, rrName string, rrType string) string {
-	return fmt.Sprintf("/zone/%s/recordset/%s/%s", zoneName, rrName, rrType)
+	return nil
 }

@@ -18,16 +18,11 @@ import (
 	"github.com/davidseybold/beacondns/internal/api"
 	"github.com/davidseybold/beacondns/internal/db/kvstore"
 	"github.com/davidseybold/beacondns/internal/db/postgres"
+	"github.com/davidseybold/beacondns/internal/dnsstore"
 	"github.com/davidseybold/beacondns/internal/logger"
-	"github.com/davidseybold/beacondns/internal/messaging"
 	"github.com/davidseybold/beacondns/internal/repository"
 	"github.com/davidseybold/beacondns/internal/worker"
 	"github.com/davidseybold/beacondns/internal/zone"
-)
-
-const (
-	exchangeName        = "beacon"
-	acknowledgmentQueue = "controller.change.ack"
 )
 
 type serviceConfig struct {
@@ -96,10 +91,12 @@ func start(ctx context.Context, w io.Writer) error {
 	}
 	defer kvstore.Close()
 
+	dnsStore := dnsstore.New(kvstore)
+
 	workerCtx, workerCancel := context.WithCancel(ctx)
 	defer workerCancel()
 
-	worker := worker.New(repoRegistry, kvstore, log)
+	worker := worker.New(repoRegistry, dnsStore, log)
 
 	var g run.Group
 	{
@@ -163,61 +160,4 @@ func loadConfig() (*serviceConfig, error) {
 	}
 
 	return &cfg, nil
-}
-
-type messagingInfrastructure struct {
-	Publisher messaging.Publisher
-	Consumer  messaging.Consumer
-
-	publishConn messaging.AMQPConnection
-	consumeConn messaging.AMQPConnection
-}
-
-func (m *messagingInfrastructure) Close() error {
-	if err := m.publishConn.Close(); err != nil {
-		return fmt.Errorf("error closing publish connection: %w", err)
-	}
-
-	if err := m.consumeConn.Close(); err != nil {
-		return fmt.Errorf("error closing consume connection: %w", err)
-	}
-
-	return nil
-}
-
-func setupMessaging(host string) (*messagingInfrastructure, error) {
-	publishConn, err := messaging.DialAMQP(host)
-	if err != nil {
-		return nil, fmt.Errorf("error creating RabbitMQ connection: %w", err)
-	}
-
-	publisher, err := messaging.NewRabbitMQPublisher(publishConn, "beacon")
-	if err != nil {
-		return nil, fmt.Errorf("error creating RabbitMQ publisher: %w", err)
-	}
-
-	consumeConn, err := messaging.DialAMQP(host)
-	if err != nil {
-		return nil, fmt.Errorf("error creating RabbitMQ connection: %w", err)
-	}
-
-	consumer := messaging.NewRabbitMQConsumer("controller", consumeConn)
-
-	err = messaging.SetupAMQPTopology(consumeConn, messaging.RabbitMQTopology{
-		Exchange: messaging.RabbitMQExchange{
-			Name: exchangeName,
-			Kind: "topic",
-		},
-		Queues: []string{acknowledgmentQueue},
-	})
-	if err != nil {
-		return nil, fmt.Errorf("error setting up RabbitMQ topology: %w", err)
-	}
-
-	return &messagingInfrastructure{
-		Publisher:   publisher,
-		Consumer:    consumer,
-		publishConn: publishConn,
-		consumeConn: consumeConn,
-	}, nil
 }
