@@ -2,9 +2,11 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/pkg/errors"
 
 	"github.com/davidseybold/beacondns/internal/db/postgres"
 	"github.com/davidseybold/beacondns/internal/model"
@@ -15,10 +17,19 @@ const (
 
 	insertResourceRecordSetQuery = "INSERT INTO resource_record_sets (id, zone_id, name, record_type, ttl) VALUES ($1, $2, $3, $4, $5);"
 	insertResourceRecordQuery    = "INSERT INTO resource_records (resource_record_set_id, value) VALUES ($1, $2);"
+
+	selectZoneInfoQuery = `
+	SELECT z.id, z.name, count(rrs.*)
+	FROM zones z
+	INNER JOIN resource_record_sets rrs ON rrs.zone_id = z.id
+	WHERE z.id = $1
+	GROUP BY z.id
+	`
 )
 
 type ZoneRepository interface {
 	CreateZone(ctx context.Context, zone *model.Zone) error
+	GetZoneInfo(ctx context.Context, id uuid.UUID) (*model.ZoneInfo, error)
 }
 
 type PostgresZoneRepository struct {
@@ -75,4 +86,17 @@ func (p *PostgresZoneRepository) insertResourceRecordSets(
 		}
 	}
 	return nil
+}
+
+func (p *PostgresZoneRepository) GetZoneInfo(ctx context.Context, id uuid.UUID) (*model.ZoneInfo, error) {
+	row := p.db.QueryRow(ctx, selectZoneInfoQuery, id)
+	var zone model.ZoneInfo
+	err := row.Scan(&zone.ID, &zone.Name, &zone.ResourceRecordSetCount)
+	if err != nil && errors.Is(err, sql.ErrNoRows) {
+		return nil, ErrNotFound
+	} else if err != nil {
+		return nil, fmt.Errorf("failed to get zone %s: %w", id, err)
+	}
+
+	return &zone, nil
 }

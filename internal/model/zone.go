@@ -17,21 +17,21 @@ const (
 )
 
 type ZoneInfo struct {
-	ID   uuid.UUID `json:"id"`
-	Name string    `json:"name"`
+	ID                     uuid.UUID `json:"id"`
+	Name                   string    `json:"name"`
+	ResourceRecordSetCount int       `json:"resourceRecordSetCount"`
 }
 
 type Zone struct {
-	ZoneInfo
+	ID                 uuid.UUID           `json:"id"`
+	Name               string              `json:"name"`
 	ResourceRecordSets []ResourceRecordSet `json:"resourceRecordSets"`
 }
 
 func NewZone(name string) Zone {
 	return Zone{
-		ZoneInfo: ZoneInfo{
-			ID:   uuid.New(),
-			Name: name,
-		},
+		ID:   uuid.New(),
+		Name: name,
 	}
 }
 

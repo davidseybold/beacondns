@@ -10,8 +10,6 @@ import (
 
 	"github.com/coredns/caddy"
 
-	// Used for plugin registration.
-
 	"github.com/coredns/coredns/core/dnsserver"
 	_ "github.com/coredns/coredns/plugin/any"     // used for plugin registration.
 	_ "github.com/coredns/coredns/plugin/errors"  // used for plugin registration.

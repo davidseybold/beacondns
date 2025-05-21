@@ -16,8 +16,9 @@ type CreateZoneRequest struct {
 }
 
 type Zone struct {
-	ID   string `json:"id"`
-	Name string `json:"name"`
+	ID                     string `json:"id"`
+	Name                   string `json:"name"`
+	ResourceRecordSetCount int    `json:"resourceRecordSetCount"`
 }
 
 type CreateZoneResponse struct {

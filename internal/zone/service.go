@@ -2,6 +2,7 @@ package zone
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -28,7 +29,7 @@ const (
 type Service interface {
 	// Zone management
 	CreateZone(ctx context.Context, name string) (*CreateZoneResult, error)
-	GetZone(ctx context.Context, id uuid.UUID) (*model.ZoneInfo, error)
+	GetZoneInfo(ctx context.Context, id uuid.UUID) (*model.ZoneInfo, error)
 	ListZones(ctx context.Context) ([]model.ZoneInfo, error)
 
 	// Resource record management
@@ -123,8 +124,15 @@ func (d *DefaultService) CreateZone(ctx context.Context, name string) (*CreateZo
 	}, nil
 }
 
-func (d *DefaultService) GetZone(_ context.Context, _ uuid.UUID) (*model.ZoneInfo, error) {
-	panic("unimplemented")
+func (d *DefaultService) GetZoneInfo(ctx context.Context, id uuid.UUID) (*model.ZoneInfo, error) {
+	z, err := d.registry.GetZoneRepository().GetZoneInfo(ctx, id)
+	if err != nil && errors.Is(err, repository.ErrNotFound) {
+		return nil, model.ErrZoneNotFound
+	} else if err != nil {
+		return nil, fmt.Errorf("failed to get zone %s: %w", id, err)
+	}
+
+	return z, nil
 }
 
 func (d *DefaultService) ListZones(_ context.Context) ([]model.ZoneInfo, error) {

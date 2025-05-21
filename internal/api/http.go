@@ -104,7 +104,7 @@ func (h *handler) GetZone(c *gin.Context) {
 		return
 	}
 
-	zone, err := h.zoneService.GetZone(c.Request.Context(), zoneID)
+	zone, err := h.zoneService.GetZoneInfo(c.Request.Context(), zoneID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Code:    "InternalServerError",
@@ -114,7 +114,8 @@ func (h *handler) GetZone(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, Zone{
-		ID:   zone.ID.String(),
-		Name: zone.Name,
+		ID:                     zone.ID.String(),
+		Name:                   zone.Name,
+		ResourceRecordSetCount: zone.ResourceRecordSetCount,
 	})
 }
