@@ -13,12 +13,14 @@ require (
 	github.com/miekg/dns v1.1.65
 	github.com/oklog/run v1.1.0
 	github.com/pkg/errors v0.9.1
-	github.com/rabbitmq/amqp091-go v1.10.0
+	github.com/spf13/cobra v1.9.1
 	github.com/stretchr/testify v1.10.0
 	go.etcd.io/etcd/client/v3 v3.5.20
 )
 
 require (
+	github.com/inconshreveable/mousetrap v1.1.0 // indirect
+	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
 	go.etcd.io/etcd/api/v3 v3.5.20 // indirect
 )

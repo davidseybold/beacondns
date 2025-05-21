@@ -29,6 +29,7 @@ const (
 type Service interface {
 	// Zone management
 	CreateZone(ctx context.Context, name string) (*CreateZoneResult, error)
+	DeleteZone(ctx context.Context, id uuid.UUID) (*model.Change, error)
 	GetZoneInfo(ctx context.Context, id uuid.UUID) (*model.ZoneInfo, error)
 	ListZones(ctx context.Context) ([]model.ZoneInfo, error)
 
@@ -208,4 +209,38 @@ func (d *DefaultService) ListResourceRecordSets(
 	zoneID uuid.UUID,
 ) ([]model.ResourceRecordSet, error) {
 	return d.registry.GetZoneRepository().GetZoneResourceRecordSets(ctx, zoneID)
+}
+
+func (d *DefaultService) DeleteZone(ctx context.Context, id uuid.UUID) (*model.Change, error) {
+	zone, err := d.registry.GetZoneRepository().GetZone(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get zone %s: %w", id, err)
+	}
+
+	zoneChange := model.NewZoneChange(zone.Name, model.ZoneChangeActionDelete, []model.ResourceRecordSetChange{})
+	change := model.NewChangeWithZoneChange(zoneChange, model.ChangeStatusPending)
+
+	rawResult, err := d.registry.InTx(ctx, func(ctx context.Context, r repository.Registry) (any, error) {
+		err := r.GetZoneRepository().DeleteZone(ctx, id)
+		if err != nil {
+			return nil, err
+		}
+
+		newChange, err := r.GetChangeRepository().CreateChange(ctx, change)
+		if err != nil {
+			return nil, err
+		}
+
+		return newChange, nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to delete zone: %w", err)
+	}
+
+	chResult, ok := rawResult.(*model.Change)
+	if !ok {
+		return nil, fmt.Errorf("unexpected result type: %T", rawResult)
+	}
+
+	return chResult, nil
 }

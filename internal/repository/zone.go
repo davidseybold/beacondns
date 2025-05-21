@@ -13,8 +13,8 @@ import (
 )
 
 const (
-	insertZoneQuery = "INSERT INTO zones(id, name) VALUES ($1, $2);"
-
+	insertZoneQuery              = "INSERT INTO zones(id, name) VALUES ($1, $2);"
+	deleteZoneQuery              = "DELETE FROM zones WHERE id = $1;"
 	insertResourceRecordSetQuery = "INSERT INTO resource_record_sets (id, zone_id, name, record_type, ttl) VALUES ($1, $2, $3, $4, $5) RETURNING id;"
 	insertResourceRecordQuery    = "INSERT INTO resource_records (resource_record_set_id, value) VALUES ($1, $2);"
 
@@ -85,6 +85,7 @@ const (
 
 type ZoneRepository interface {
 	CreateZone(ctx context.Context, zone *model.Zone) error
+	DeleteZone(ctx context.Context, id uuid.UUID) error
 	GetZone(ctx context.Context, id uuid.UUID) (*model.Zone, error)
 	GetZoneInfo(ctx context.Context, id uuid.UUID) (*model.ZoneInfo, error)
 	ListZoneInfos(ctx context.Context) ([]model.ZoneInfo, error)
@@ -156,6 +157,14 @@ func (p *PostgresZoneRepository) InsertResourceRecordSet(
 		}
 	}
 
+	return nil
+}
+
+func (p *PostgresZoneRepository) DeleteZone(ctx context.Context, id uuid.UUID) error {
+	_, err := p.db.Exec(ctx, deleteZoneQuery, id)
+	if err != nil {
+		return fmt.Errorf("failed to delete zone: %w", err)
+	}
 	return nil
 }
 

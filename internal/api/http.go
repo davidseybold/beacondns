@@ -22,6 +22,7 @@ func NewHTTPHandler(zoneService zone.Service) http.Handler {
 	{
 		g := r.Group("/v1/zones")
 		g.POST("", handler.CreateZone)
+		g.DELETE("/:zoneID", handler.DeleteZone)
 		g.GET("", handler.ListZones)
 		g.GET("/:zoneID", handler.GetZone)
 		g.POST("/:zoneID/rrsets", handler.ChangeResourceRecordSets)
@@ -203,4 +204,30 @@ func (h *handler) ListResourceRecordSets(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, responseBody)
+}
+
+func (h *handler) DeleteZone(c *gin.Context) {
+	zoneID, err := uuid.Parse(c.Param("zoneID"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Code:    "BadRequest",
+			Message: "invalid zone ID",
+		})
+		return
+	}
+
+	change, err := h.zoneService.DeleteZone(c.Request.Context(), zoneID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Code:    "InternalServerError",
+			Message: err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, ChangeInfo{
+		ID:          change.ID.String(),
+		Status:      string(change.Status),
+		SubmittedAt: change.SubmittedAt.Format("2006-01-02T15:04:05Z"),
+	})
 }
