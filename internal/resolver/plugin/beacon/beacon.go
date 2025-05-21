@@ -34,13 +34,14 @@ type Beacon struct {
 
 var _ plugin.Handler = (*Beacon)(nil)
 
+func (b *Beacon) Name() string { return "beacon" }
+
 func (b *Beacon) lookup(zoneName, rrName string, t dns.Type) ([]dns.RR, bool) {
 	val, err := b.store.GetRRSet(context.Background(), zoneName, rrName, t.String())
 	if err != nil && errors.Is(err, dnsstore.ErrNotFound) {
-		log.Info("record not found", " zone ", zoneName, " rrName ", rrName, " type ", t)
 		return nil, false
 	} else if err != nil {
-		log.Error("error getting record ", " error ", err)
+		log.Errorf("error looking up rrset %s for zone %s: %s", rrName, zoneName, err.Error())
 		return nil, false
 	}
 
@@ -55,9 +56,9 @@ func (b *Beacon) listenForZoneChanges(ctx context.Context, ch <-chan kvstore.Eve
 		case event := <-ch:
 			switch event.Type {
 			case kvstore.EventTypePut:
-				b.zoneTrie.AddZone(event.Key)
+				b.zoneTrie.AddZone(string(event.Value))
 			case kvstore.EventTypeDelete:
-				b.zoneTrie.RemoveZone(event.Key)
+				b.zoneTrie.RemoveZone(string(event.Value))
 			}
 		}
 	}

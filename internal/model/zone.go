@@ -36,7 +36,7 @@ func NewZone(name string) Zone {
 }
 
 type ResourceRecordSet struct {
-	ID              uuid.UUID        `json:"id"`
+	ID              uuid.UUID        `json:"id,omitempty"`
 	Name            string           `json:"name"`
 	Type            RRType           `json:"type"`
 	TTL             uint32           `json:"ttl"`

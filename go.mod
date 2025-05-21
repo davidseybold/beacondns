@@ -15,12 +15,13 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/stretchr/testify v1.10.0
-	github.com/tinylib/msgp v1.2.1
-	go.etcd.io/etcd/api/v3 v3.5.20
 	go.etcd.io/etcd/client/v3 v3.5.20
 )
 
-require github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
+require (
+	github.com/vmihailenco/tagparser/v2 v2.0.0 // indirect
+	go.etcd.io/etcd/api/v3 v3.5.20 // indirect
+)
 
 require (
 	github.com/apparentlymart/go-cidr v1.1.0 // indirect
@@ -62,7 +63,6 @@ require (
 	github.com/onsi/ginkgo/v2 v2.21.0 // indirect
 	github.com/opentracing/opentracing-go v1.2.0 // indirect
 	github.com/pelletier/go-toml/v2 v2.2.2 // indirect
-	github.com/philhofer/fwd v1.1.3-0.20240612014219-fbbf4953d986 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/prometheus/client_golang v1.21.1 // indirect
 	github.com/prometheus/client_model v0.6.1 // indirect

@@ -135,16 +135,72 @@ func (d *DefaultService) GetZoneInfo(ctx context.Context, id uuid.UUID) (*model.
 	return z, nil
 }
 
-func (d *DefaultService) ListZones(_ context.Context) ([]model.ZoneInfo, error) {
-	panic("unimplemented")
+func (d *DefaultService) ListZones(ctx context.Context) ([]model.ZoneInfo, error) {
+	return d.registry.GetZoneRepository().ListZoneInfos(ctx)
 }
 
 func (d *DefaultService) ChangeResourceRecordSets(
-	_ context.Context,
-	_ uuid.UUID,
-	_ []model.ResourceRecordSetChange,
+	ctx context.Context,
+	zoneID uuid.UUID,
+	rrc []model.ResourceRecordSetChange,
 ) (*model.Change, error) {
-	panic("unimplemented")
+	zone, err := d.registry.GetZoneRepository().GetZone(ctx, zoneID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get zone %s: %w", zoneID, err)
+	}
+
+	err = validateChanges(zone, rrc)
+	if err != nil {
+		return nil, fmt.Errorf("failed to validate changes: %w", err)
+	}
+
+	zoneChange := model.NewZoneChange(
+		zone.Name,
+		model.ZoneChangeActionUpdate,
+		rrc,
+	)
+
+	change := model.NewChangeWithZoneChange(
+		zoneChange,
+		model.ChangeStatusPending,
+	)
+
+	rawResult, err := d.registry.InTx(ctx, func(ctx context.Context, r repository.Registry) (any, error) {
+		for _, ch := range rrc {
+			switch ch.Action {
+			case model.RRSetChangeActionCreate:
+				ch.ResourceRecordSet.ID = uuid.New()
+				err = r.GetZoneRepository().InsertResourceRecordSet(ctx, zoneID, &ch.ResourceRecordSet)
+			case model.RRSetChangeActionUpsert:
+				ch.ResourceRecordSet.ID = uuid.New()
+				err = r.GetZoneRepository().UpsertResourceRecordSet(ctx, zoneID, &ch.ResourceRecordSet)
+			case model.RRSetChangeActionDelete:
+				err = r.GetZoneRepository().DeleteResourceRecordSet(ctx, zoneID, &ch.ResourceRecordSet)
+			}
+
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		var newChange *model.Change
+		newChange, err = r.GetChangeRepository().CreateChange(ctx, change)
+		if err != nil {
+			return nil, err
+		}
+
+		return newChange, nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to change resource record sets: %w", err)
+	}
+
+	chResult, ok := rawResult.(*model.Change)
+	if !ok {
+		return nil, fmt.Errorf("unexpected result type: %T", rawResult)
+	}
+
+	return chResult, nil
 }
 
 func (d *DefaultService) ListResourceRecordSets(

@@ -6,6 +6,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 
+	"github.com/davidseybold/beacondns/internal/model"
 	"github.com/davidseybold/beacondns/internal/zone"
 )
 
@@ -19,10 +20,11 @@ func NewHTTPHandler(zoneService zone.Service) http.Handler {
 	r.GET("/health", handler.Health)
 
 	{
-		g := r.Group("/zones")
+		g := r.Group("/v1/zones")
 		g.POST("", handler.CreateZone)
 		g.GET("", handler.ListZones)
-		g.GET("/:id", handler.GetZone)
+		g.GET("/:zoneID", handler.GetZone)
+		g.POST("/:zoneID/rrsets", handler.ChangeResourceRecordSets)
 	}
 
 	return r
@@ -95,7 +97,7 @@ func (h *handler) CreateZone(c *gin.Context) {
 }
 
 func (h *handler) GetZone(c *gin.Context) {
-	zoneID, err := uuid.Parse(c.Param("id"))
+	zoneID, err := uuid.Parse(c.Param("zoneID"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Code:    "BadRequest",
@@ -117,5 +119,45 @@ func (h *handler) GetZone(c *gin.Context) {
 		ID:                     zone.ID.String(),
 		Name:                   zone.Name,
 		ResourceRecordSetCount: zone.ResourceRecordSetCount,
+	})
+}
+
+func (h *handler) ChangeResourceRecordSets(c *gin.Context) {
+	zoneID, err := uuid.Parse(c.Param("zoneID"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Code:    "BadRequest",
+			Message: "invalid zone ID",
+		})
+		return
+	}
+
+	var body ChangeResourceRecordSetsRequest
+	if err = c.ShouldBindJSON(&body); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Code:    "BadRequest",
+			Message: err.Error(),
+		})
+		return
+	}
+
+	changes := make([]model.ResourceRecordSetChange, len(body.Changes))
+	for i, change := range body.Changes {
+		changes[i] = convertAPIChangeToModel(change)
+	}
+
+	change, err := h.zoneService.ChangeResourceRecordSets(c.Request.Context(), zoneID, changes)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Code:    "InternalServerError",
+			Message: err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, ChangeInfo{
+		ID:          change.ID.String(),
+		Status:      string(change.Status),
+		SubmittedAt: change.SubmittedAt.Format("2006-01-02T15:04:05Z"),
 	})
 }

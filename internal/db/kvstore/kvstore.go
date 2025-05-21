@@ -76,7 +76,7 @@ type Scope struct {
 
 func (s *Scope) Validate() error {
 	if s.Namespace == "" {
-		return fmt.Errorf("namespace is required")
+		return errors.New("namespace is required")
 	}
 
 	return nil

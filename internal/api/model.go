@@ -29,3 +29,23 @@ type CreateZoneResponse struct {
 type ListZonesResponse struct {
 	Zones []Zone `json:"zones"`
 }
+
+type ChangeResourceRecordSetsRequest struct {
+	Changes []Change `json:"changes"`
+}
+
+type Change struct {
+	Action            string            `json:"action"`
+	ResourceRecordSet ResourceRecordSet `json:"resourceRecordSet"`
+}
+
+type ResourceRecordSet struct {
+	Name            string           `json:"name"`
+	Type            string           `json:"type"`
+	TTL             uint32           `json:"ttl"`
+	ResourceRecords []ResourceRecord `json:"resourceRecords"`
+}
+
+type ResourceRecord struct {
+	Value string `json:"value"`
+}

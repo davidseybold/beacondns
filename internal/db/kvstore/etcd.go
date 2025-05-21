@@ -10,6 +10,7 @@ import (
 
 const (
 	etcdDialTimeout = 5 * time.Second
+	etcdWatchBuffer = 100
 )
 
 type EtcdClient struct {
@@ -80,53 +81,61 @@ func (e *EtcdClient) Delete(ctx context.Context, key string, opts ...Option) err
 
 func (e *EtcdClient) Watch(ctx context.Context, key string, opts ...Option) (<-chan Event, error) {
 	etcdOpts := applyOptions(opts...)
-
 	rch := e.etcdClient.Watch(ctx, key, etcdOpts...)
 
-	// Use a buffered channel to prevent blocking
-	ch := make(chan Event, 100)
+	ch := make(chan Event, etcdWatchBuffer)
 
-	go func(in <-chan clientv3.WatchResponse, out chan<- Event) {
-		defer close(out)
-
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case resp, ok := <-in:
-				if !ok {
-					return
-				}
-
-				if resp.Err() != nil {
-					// TODO: log error
-					continue
-				}
-
-				for _, ev := range resp.Events {
-					event := Event{
-						Key:   string(ev.Kv.Key),
-						Value: ev.Kv.Value,
-					}
-
-					switch ev.Type {
-					case clientv3.EventTypePut:
-						event.Type = EventTypePut
-					case clientv3.EventTypeDelete:
-						event.Type = EventTypeDelete
-					}
-
-					select {
-					case out <- event:
-					case <-ctx.Done():
-						return
-					}
-				}
-			}
-		}
-	}(rch, ch)
+	go watchLoop(ctx, rch, ch)
 
 	return ch, nil
+}
+
+func watchLoop(ctx context.Context, in <-chan clientv3.WatchResponse, out chan<- Event) {
+	defer close(out)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case resp, ok := <-in:
+			if !ok {
+				return
+			}
+			processWatchResponse(ctx, resp, out)
+		}
+	}
+}
+
+func processWatchResponse(ctx context.Context, resp clientv3.WatchResponse, out chan<- Event) {
+	if resp.Err() != nil {
+		// TODO: log error
+		return
+	}
+
+	for _, ev := range resp.Events {
+		event := convertEtcdEvent(ev)
+		select {
+		case out <- event:
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func convertEtcdEvent(ev *clientv3.Event) Event {
+	event := Event{
+		Key:   string(ev.Kv.Key),
+		Value: ev.Kv.Value,
+	}
+
+	switch ev.Type {
+	case clientv3.EventTypePut:
+		event.Type = EventTypePut
+	case clientv3.EventTypeDelete:
+		event.Type = EventTypeDelete
+	}
+
+	return event
 }
 
 func (e *EtcdClient) Close() error {

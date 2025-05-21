@@ -2,7 +2,6 @@ package beacon
 
 import (
 	"context"
-	"errors"
 
 	"github.com/coredns/coredns/plugin"
 	"github.com/coredns/coredns/request"
@@ -18,13 +17,14 @@ func (b *Beacon) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg)
 	zone := b.zoneTrie.FindLongestMatch(qname)
 
 	if zone == "" {
-		log.Info("no zone found, forwarding to next plugin")
+		log.Debug("no zone found, forwarding to next plugin")
 		return plugin.NextOrFailure(b.Name(), b.Next, ctx, w, r)
 	}
 
 	answers, ok := b.lookup(zone, qname, dns.Type(qtype))
 	if !ok {
-		return b.errorResponse(state, dns.RcodeServerFailure, errors.New("no answers found"))
+		log.Debug("no answers found, returning not found response")
+		return b.notFoundResponse(zone, state), nil
 	}
 
 	m := new(dns.Msg)
@@ -40,14 +40,17 @@ func (b *Beacon) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg)
 	return dns.RcodeSuccess, nil
 }
 
-func (b *Beacon) Name() string { return "beacon" }
-
-func (b *Beacon) errorResponse(state request.Request, rcode int, err error) (int, error) {
+func (b *Beacon) notFoundResponse(zone string, state request.Request) int {
 	m := new(dns.Msg)
-	m.SetRcode(state.Req, rcode)
+	m.SetRcode(state.Req, dns.RcodeNameError)
 	m.Authoritative, m.RecursionAvailable, m.Compress = true, false, true
+
+	soa, ok := b.lookup(zone, zone, dns.Type(dns.TypeSOA))
+	if ok {
+		m.Ns = append(m.Ns, soa...)
+	}
 
 	state.SizeAndDo(m)
 	_ = state.W.WriteMsg(m)
-	return dns.RcodeSuccess, err
+	return dns.RcodeSuccess
 }
