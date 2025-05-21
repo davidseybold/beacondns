@@ -89,6 +89,7 @@ type ZoneRepository interface {
 	GetZoneInfo(ctx context.Context, id uuid.UUID) (*model.ZoneInfo, error)
 	ListZoneInfos(ctx context.Context) ([]model.ZoneInfo, error)
 	GetResourceRecordSet(ctx context.Context, id uuid.UUID) (*model.ResourceRecordSet, error)
+	GetZoneResourceRecordSets(ctx context.Context, zoneID uuid.UUID) ([]model.ResourceRecordSet, error)
 	InsertResourceRecordSet(ctx context.Context, zoneID uuid.UUID, recordSet *model.ResourceRecordSet) error
 	UpsertResourceRecordSet(ctx context.Context, zoneID uuid.UUID, recordSet *model.ResourceRecordSet) error
 	DeleteResourceRecordSet(ctx context.Context, zoneID uuid.UUID, recordSet *model.ResourceRecordSet) error

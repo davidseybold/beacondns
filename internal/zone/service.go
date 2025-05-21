@@ -204,8 +204,8 @@ func (d *DefaultService) ChangeResourceRecordSets(
 }
 
 func (d *DefaultService) ListResourceRecordSets(
-	_ context.Context,
-	_ uuid.UUID,
+	ctx context.Context,
+	zoneID uuid.UUID,
 ) ([]model.ResourceRecordSet, error) {
-	panic("unimplemented")
+	return d.registry.GetZoneRepository().GetZoneResourceRecordSets(ctx, zoneID)
 }

@@ -30,6 +30,10 @@ type ListZonesResponse struct {
 	Zones []Zone `json:"zones"`
 }
 
+type ListResourceRecordSetsResponse struct {
+	ResourceRecordSets []ResourceRecordSet `json:"resourceRecordSets"`
+}
+
 type ChangeResourceRecordSetsRequest struct {
 	Changes []Change `json:"changes"`
 }

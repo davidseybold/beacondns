@@ -25,6 +25,7 @@ func NewHTTPHandler(zoneService zone.Service) http.Handler {
 		g.GET("", handler.ListZones)
 		g.GET("/:zoneID", handler.GetZone)
 		g.POST("/:zoneID/rrsets", handler.ChangeResourceRecordSets)
+		g.GET("/:zoneID/rrsets", handler.ListResourceRecordSets)
 	}
 
 	return r
@@ -54,8 +55,9 @@ func (h *handler) ListZones(c *gin.Context) {
 
 	for i, zone := range zones {
 		responseBody.Zones[i] = Zone{
-			ID:   zone.ID.String(),
-			Name: zone.Name,
+			ID:                     zone.ID.String(),
+			Name:                   zone.Name,
+			ResourceRecordSetCount: zone.ResourceRecordSetCount,
 		}
 	}
 
@@ -88,8 +90,9 @@ func (h *handler) CreateZone(c *gin.Context) {
 			SubmittedAt: res.Change.SubmittedAt.Format("2006-01-02T15:04:05Z"),
 		},
 		Zone: Zone{
-			ID:   res.Zone.ID.String(),
-			Name: res.Zone.Name,
+			ID:                     res.Zone.ID.String(),
+			Name:                   res.Zone.Name,
+			ResourceRecordSetCount: len(res.Zone.ResourceRecordSets),
 		},
 	}
 
@@ -160,4 +163,44 @@ func (h *handler) ChangeResourceRecordSets(c *gin.Context) {
 		Status:      string(change.Status),
 		SubmittedAt: change.SubmittedAt.Format("2006-01-02T15:04:05Z"),
 	})
+}
+
+func (h *handler) ListResourceRecordSets(c *gin.Context) {
+	zoneID, err := uuid.Parse(c.Param("zoneID"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Code:    "BadRequest",
+			Message: "invalid zone ID",
+		})
+		return
+	}
+
+	rrsets, err := h.zoneService.ListResourceRecordSets(c.Request.Context(), zoneID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{
+			Code:    "InternalServerError",
+			Message: err.Error(),
+		})
+	}
+
+	responseBody := ListResourceRecordSetsResponse{
+		ResourceRecordSets: make([]ResourceRecordSet, len(rrsets)),
+	}
+
+	for i, rrset := range rrsets {
+		responseBody.ResourceRecordSets[i] = ResourceRecordSet{
+			Name:            rrset.Name,
+			Type:            string(rrset.Type),
+			TTL:             rrset.TTL,
+			ResourceRecords: make([]ResourceRecord, len(rrset.ResourceRecords)),
+		}
+
+		for j, record := range rrset.ResourceRecords {
+			responseBody.ResourceRecordSets[i].ResourceRecords[j] = ResourceRecord{
+				Value: record.Value,
+			}
+		}
+	}
+
+	c.JSON(http.StatusOK, responseBody)
 }
