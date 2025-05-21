@@ -53,7 +53,6 @@ func (b *Beacon) listenForZoneChanges(ctx context.Context, ch <-chan kvstore.Eve
 		case <-ctx.Done():
 			return
 		case event := <-ch:
-			log.Info("zone change detected")
 			switch event.Type {
 			case kvstore.EventTypePut:
 				b.zoneTrie.AddZone(event.Key)
@@ -65,13 +64,10 @@ func (b *Beacon) listenForZoneChanges(ctx context.Context, ch <-chan kvstore.Eve
 }
 
 func (b *Beacon) loadZones() error {
-	log.Info("loading zones")
 	zoneNames, err := b.store.GetZoneNames(context.Background())
 	if err != nil {
 		return fmt.Errorf("error getting zones: %w", err)
 	}
-
-	log.Info("loading zones ", " count ", len(zoneNames))
 
 	for _, zoneName := range zoneNames {
 		b.zoneTrie.AddZone(zoneName)

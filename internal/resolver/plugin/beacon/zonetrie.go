@@ -5,7 +5,8 @@ import (
 )
 
 type ZoneTrie struct {
-	root *ZoneNode
+	root      *ZoneNode
+	zoneCount int
 }
 
 type ZoneNode struct {
@@ -19,6 +20,7 @@ func NewZoneTrie() *ZoneTrie {
 			ZoneName: "",
 			Children: make(map[string]*ZoneNode),
 		},
+		zoneCount: 0,
 	}
 }
 
@@ -36,6 +38,10 @@ func (t *ZoneTrie) AddZone(zoneName string) {
 			}
 		}
 		current = current.Children[part]
+	}
+
+	if current.ZoneName == "" {
+		t.zoneCount++
 	}
 	current.ZoneName = zoneName
 }
@@ -55,6 +61,10 @@ func (t *ZoneTrie) RemoveZone(zoneName string) {
 		}
 		current = current.Children[part]
 		path = append(path, current)
+	}
+
+	if current.ZoneName != "" {
+		t.zoneCount--
 	}
 
 	current.ZoneName = ""
@@ -104,4 +114,8 @@ func (t *ZoneTrie) FindLongestMatch(domainName string) string {
 	}
 
 	return match
+}
+
+func (t *ZoneTrie) Count() int {
+	return t.zoneCount
 }

@@ -25,6 +25,10 @@ var _ KVStore = (*EtcdClient)(nil)
 var _ Transaction = (*etcdTransaction)(nil)
 
 func NewEtcdClient(endpoints []string, scope Scope) (*EtcdClient, error) {
+	if err := scope.Validate(); err != nil {
+		return nil, err
+	}
+
 	etcdClient, err := clientv3.New(clientv3.Config{
 		Endpoints:   endpoints,
 		DialTimeout: etcdDialTimeout,
@@ -79,12 +83,45 @@ func (e *EtcdClient) Watch(ctx context.Context, key string, opts ...Option) (<-c
 
 	rch := e.etcdClient.Watch(ctx, key, etcdOpts...)
 
-	ch := make(chan Event)
+	// Use a buffered channel to prevent blocking
+	ch := make(chan Event, 100)
 
 	go func(in <-chan clientv3.WatchResponse, out chan<- Event) {
-		for resp := range in {
-			for _, ev := range resp.Events {
-				out <- Event{Key: string(ev.Kv.Key), Value: ev.Kv.Value}
+		defer close(out)
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case resp, ok := <-in:
+				if !ok {
+					return
+				}
+
+				if resp.Err() != nil {
+					// TODO: log error
+					continue
+				}
+
+				for _, ev := range resp.Events {
+					event := Event{
+						Key:   string(ev.Kv.Key),
+						Value: ev.Kv.Value,
+					}
+
+					switch ev.Type {
+					case clientv3.EventTypePut:
+						event.Type = EventTypePut
+					case clientv3.EventTypeDelete:
+						event.Type = EventTypeDelete
+					}
+
+					select {
+					case out <- event:
+					case <-ctx.Done():
+						return
+					}
+				}
 			}
 		}
 	}(rch, ch)

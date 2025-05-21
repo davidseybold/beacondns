@@ -74,14 +74,22 @@ type Scope struct {
 	Keyspace  string
 }
 
+func (s *Scope) Validate() error {
+	if s.Namespace == "" {
+		return fmt.Errorf("namespace is required")
+	}
+
+	return nil
+}
+
 func (s *Scope) String() string {
 	if s.Namespace == "" {
-		return s.Keyspace
+		return fmt.Sprintf("/%s", s.Keyspace)
 	}
 
 	if s.Keyspace == "" {
-		return s.Namespace
+		return fmt.Sprintf("/%s", s.Namespace)
 	}
 
-	return fmt.Sprintf("%s/%s", s.Namespace, s.Keyspace)
+	return fmt.Sprintf("/%s/%s", s.Namespace, s.Keyspace)
 }
