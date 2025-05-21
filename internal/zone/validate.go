@@ -16,6 +16,7 @@ var rules = []rule{
 	nsRule,
 	duplicateRecordRule,
 	apexRecordRule,
+	rrTypeRule,
 }
 
 func validateChanges(zone *model.Zone, changes []model.ResourceRecordSetChange) error {
@@ -154,6 +155,20 @@ func apexRecordRule(zone *model.Zone, changes []model.ResourceRecordSetChange) e
 				return fmt.Errorf("invalid apex record type %s: only SOA, NS, and A records are allowed at zone apex",
 					change.ResourceRecordSet.Type)
 			}
+		}
+	}
+
+	return nil
+}
+
+// rrTypeRule ensures all record types are supported.
+func rrTypeRule(zone *model.Zone, changes []model.ResourceRecordSetChange) error {
+	for _, change := range changes {
+		if _, ok := model.SupportedRRTypes[change.ResourceRecordSet.Type]; !ok {
+			return fmt.Errorf("invalid record type %s: only supported types are %v",
+				change.ResourceRecordSet.Type,
+				model.SupportedRRTypes,
+			)
 		}
 	}
 

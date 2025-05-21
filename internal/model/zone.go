@@ -16,6 +16,14 @@ const (
 	RRTypeCNAME RRType = "CNAME"
 )
 
+var SupportedRRTypes = map[RRType]struct{}{
+	RRTypeSOA:   {},
+	RRTypeNS:    {},
+	RRTypeA:     {},
+	RRTypeAAAA:  {},
+	RRTypeCNAME: {},
+}
+
 type ZoneInfo struct {
 	ID                     uuid.UUID `json:"id"`
 	Name                   string    `json:"name"`
