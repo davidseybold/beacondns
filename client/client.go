@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 )
@@ -13,6 +14,15 @@ import (
 type Client struct {
 	host       string
 	httpClient *http.Client
+}
+
+// Request types
+type CreateZoneRequest struct {
+	Name string `json:"name"`
+}
+
+type ChangeResourceRecordSetsRequest struct {
+	Changes []Change `json:"changes"`
 }
 
 // New creates a new Beacon DNS API client
@@ -80,190 +90,106 @@ type ErrorResponse struct {
 	Message string `json:"message"`
 }
 
-// CreateZone creates a new DNS zone
-func (c *Client) CreateZone(ctx context.Context, name string) (*CreateZoneResponse, error) {
-	reqBody := map[string]string{"name": name}
-	jsonBody, err := json.Marshal(reqBody)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request body: %w", err)
+// doRequest performs an HTTP request and handles common response processing
+func (c *Client) doRequest(ctx context.Context, method, path string, body any, result any) error {
+	var bodyReader io.Reader
+	if body != nil {
+		jsonBody, err := json.Marshal(body)
+		if err != nil {
+			return fmt.Errorf("failed to marshal request body: %w", err)
+		}
+		bodyReader = bytes.NewReader(jsonBody)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", c.host+"/v1/zones", bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequestWithContext(ctx, method, c.host+path, bodyReader)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+		return fmt.Errorf("failed to create request: %w", err)
 	}
+
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
+		return fmt.Errorf("request failed: %w", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusCreated {
-		var errResp ErrorResponse
-		if err := json.NewDecoder(resp.Body).Decode(&errResp); err != nil {
-			return nil, fmt.Errorf("failed to decode error response: %w", err)
+	if resp.StatusCode >= 400 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
+	}
+
+	if result != nil {
+		if err := json.NewDecoder(resp.Body).Decode(result); err != nil {
+			return fmt.Errorf("failed to decode response: %w", err)
 		}
-		return nil, fmt.Errorf("API error: %s - %s", errResp.Code, errResp.Message)
 	}
 
-	var response CreateZoneResponse
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
+	return nil
+}
 
-	return &response, nil
+// CreateZone creates a new DNS zone
+func (c *Client) CreateZone(ctx context.Context, name string) (*CreateZoneResponse, error) {
+	req := CreateZoneRequest{Name: name}
+	var resp CreateZoneResponse
+	if err := c.doRequest(ctx, "POST", "/v1/zones", req, &resp); err != nil {
+		return nil, err
+	}
+	return &resp, nil
 }
 
 // ListZones lists all DNS zones
 func (c *Client) ListZones(ctx context.Context) (*ListZonesResponse, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", c.host+"/v1/zones", nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+	var resp ListZonesResponse
+	if err := c.doRequest(ctx, "GET", "/v1/zones", nil, &resp); err != nil {
+		return nil, err
 	}
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		var errResp ErrorResponse
-		if err := json.NewDecoder(resp.Body).Decode(&errResp); err != nil {
-			return nil, fmt.Errorf("failed to decode error response: %w", err)
-		}
-		return nil, fmt.Errorf("API error: %s - %s", errResp.Code, errResp.Message)
-	}
-
-	var response ListZonesResponse
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return &response, nil
+	return &resp, nil
 }
 
 // GetZone gets information about a specific zone
-func (c *Client) GetZone(ctx context.Context, zoneID string) (*Zone, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("%s/v1/zones/%s", c.host, zoneID), nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+func (c *Client) GetZone(ctx context.Context, id string) (*Zone, error) {
+	var resp Zone
+	if err := c.doRequest(ctx, "GET", fmt.Sprintf("/v1/zones/%s", id), nil, &resp); err != nil {
+		return nil, err
 	}
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		var errResp ErrorResponse
-		if err := json.NewDecoder(resp.Body).Decode(&errResp); err != nil {
-			return nil, fmt.Errorf("failed to decode error response: %w", err)
-		}
-		return nil, fmt.Errorf("API error: %s - %s", errResp.Code, errResp.Message)
-	}
-
-	var zone Zone
-	if err := json.NewDecoder(resp.Body).Decode(&zone); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return &zone, nil
+	return &resp, nil
 }
 
-// ChangeResourceRecordSets changes resource record sets in a zone
-func (c *Client) ChangeResourceRecordSets(ctx context.Context, zoneID string, changes []Change) (*ChangeInfo, error) {
-	reqBody := map[string][]Change{"changes": changes}
-	jsonBody, err := json.Marshal(reqBody)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal request body: %w", err)
+// DeleteZone deletes a DNS zone
+func (c *Client) DeleteZone(ctx context.Context, id string) (*ChangeInfo, error) {
+	var resp ChangeInfo
+	if err := c.doRequest(ctx, "DELETE", fmt.Sprintf("/v1/zones/%s", id), nil, &resp); err != nil {
+		return nil, err
 	}
-
-	req, err := http.NewRequestWithContext(ctx, "POST", fmt.Sprintf("%s/v1/zones/%s/rrsets", c.host, zoneID), bytes.NewBuffer(jsonBody))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		var errResp ErrorResponse
-		if err := json.NewDecoder(resp.Body).Decode(&errResp); err != nil {
-			return nil, fmt.Errorf("failed to decode error response: %w", err)
-		}
-		return nil, fmt.Errorf("API error: %s - %s", errResp.Code, errResp.Message)
-	}
-
-	var changeInfo ChangeInfo
-	if err := json.NewDecoder(resp.Body).Decode(&changeInfo); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return &changeInfo, nil
+	return &resp, nil
 }
 
 // ListResourceRecordSets lists all resource record sets in a zone
 func (c *Client) ListResourceRecordSets(ctx context.Context, zoneID string) (*ListResourceRecordSetsResponse, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", fmt.Sprintf("%s/v1/zones/%s/rrsets", c.host, zoneID), nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+	var resp ListResourceRecordSetsResponse
+	if err := c.doRequest(ctx, "GET", fmt.Sprintf("/v1/zones/%s/rrsets", zoneID), nil, &resp); err != nil {
+		return nil, err
 	}
-
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		var errResp ErrorResponse
-		if err := json.NewDecoder(resp.Body).Decode(&errResp); err != nil {
-			return nil, fmt.Errorf("failed to decode error response: %w", err)
-		}
-		return nil, fmt.Errorf("API error: %s - %s", errResp.Code, errResp.Message)
-	}
-
-	var response ListResourceRecordSetsResponse
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return &response, nil
+	return &resp, nil
 }
 
-// DeleteZone deletes a DNS zone
-func (c *Client) DeleteZone(ctx context.Context, zoneID string) (*ChangeInfo, error) {
-	req, err := http.NewRequestWithContext(ctx, "DELETE", fmt.Sprintf("%s/v1/zones/%s", c.host, zoneID), nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+// ChangeResourceRecordSets creates, updates, or deletes resource record sets
+func (c *Client) ChangeResourceRecordSets(ctx context.Context, zoneID string, changes []Change) (*ChangeInfo, error) {
+	req := ChangeResourceRecordSetsRequest{Changes: changes}
+	var resp ChangeInfo
+	if err := c.doRequest(ctx, "POST", fmt.Sprintf("/v1/zones/%s/rrsets", zoneID), req, &resp); err != nil {
+		return nil, err
 	}
+	return &resp, nil
+}
 
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
+// GetChange gets information about a change
+func (c *Client) GetChange(ctx context.Context, changeID string) (*ChangeInfo, error) {
+	var resp ChangeInfo
+	if err := c.doRequest(ctx, "GET", fmt.Sprintf("/v1/changes/%s", changeID), nil, &resp); err != nil {
+		return nil, err
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		var errResp ErrorResponse
-		if err := json.NewDecoder(resp.Body).Decode(&errResp); err != nil {
-			return nil, fmt.Errorf("failed to decode error response: %w", err)
-		}
-		return nil, fmt.Errorf("API error: %s - %s", errResp.Code, errResp.Message)
-	}
-
-	var changeInfo ChangeInfo
-	if err := json.NewDecoder(resp.Body).Decode(&changeInfo); err != nil {
-		return nil, fmt.Errorf("failed to decode response: %w", err)
-	}
-
-	return &changeInfo, nil
+	return &resp, nil
 }

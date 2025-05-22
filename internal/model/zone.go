@@ -14,6 +14,18 @@ const (
 	RRTypeA     RRType = "A"
 	RRTypeAAAA  RRType = "AAAA"
 	RRTypeCNAME RRType = "CNAME"
+	RRTypeCAA   RRType = "CAA"
+	RRTypePTR   RRType = "PTR"
+	RRTypeSSHFP RRType = "SSHFP"
+	RRTypeSVCB  RRType = "SVCB"
+	RRTypeTLSA  RRType = "TLSA"
+	RRTypeSPF   RRType = "SPF"
+	RRTypeSRV   RRType = "SRV"
+	RRTypeTXT   RRType = "TXT"
+	RRTypeNAPTR RRType = "NAPTR"
+	RRTypeDS    RRType = "DS"
+	RRTypeHTTPS RRType = "HTTPS"
+	RRTypeMX    RRType = "MX"
 )
 
 var SupportedRRTypes = map[RRType]struct{}{
@@ -22,6 +34,18 @@ var SupportedRRTypes = map[RRType]struct{}{
 	RRTypeA:     {},
 	RRTypeAAAA:  {},
 	RRTypeCNAME: {},
+	RRTypeCAA:   {},
+	RRTypePTR:   {},
+	RRTypeSSHFP: {},
+	RRTypeSVCB:  {},
+	RRTypeTLSA:  {},
+	RRTypeSPF:   {},
+	RRTypeSRV:   {},
+	RRTypeTXT:   {},
+	RRTypeNAPTR: {},
+	RRTypeDS:    {},
+	RRTypeHTTPS: {},
+	RRTypeMX:    {},
 }
 
 type ZoneInfo struct {

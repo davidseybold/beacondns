@@ -40,6 +40,9 @@ type Service interface {
 		zoneID uuid.UUID,
 		rrc []model.ResourceRecordSetChange,
 	) (*model.Change, error)
+
+	// Change management
+	GetChange(ctx context.Context, id uuid.UUID) (*model.Change, error)
 }
 
 type DefaultService struct {
@@ -243,4 +246,13 @@ func (d *DefaultService) DeleteZone(ctx context.Context, id uuid.UUID) (*model.C
 	}
 
 	return chResult, nil
+}
+
+func (d *DefaultService) GetChange(ctx context.Context, id uuid.UUID) (*model.Change, error) {
+	ch, err := d.registry.GetChangeRepository().GetChange(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get change %s: %w", id, err)
+	}
+
+	return ch, nil
 }
