@@ -2,12 +2,13 @@ package commands
 
 import (
 	"context"
-	"fmt"
 	"os"
-	"text/tabwriter"
+	"strconv"
+
+	"github.com/olekukonko/tablewriter"
+	"github.com/spf13/cobra"
 
 	"github.com/davidseybold/beacondns/client"
-	"github.com/spf13/cobra"
 )
 
 var zonesCmd = &cobra.Command{
@@ -17,18 +18,16 @@ var zonesCmd = &cobra.Command{
 }
 
 var createZoneCmd = &cobra.Command{
-	Use:   "create",
+	Use:   "create [name]",
 	Short: "Create a new DNS zone",
-	RunE: func(cmd *cobra.Command, args []string) error {
+	Args:  cobra.ExactArgs(1),
+	RunE: func(_ *cobra.Command, args []string) error {
 		config, err := loadConfig()
 		if err != nil {
 			return err
 		}
 
-		name, err := cmd.Flags().GetString("name")
-		if err != nil {
-			return err
-		}
+		name := args[0]
 
 		c := client.New(config.Host)
 		response, err := c.CreateZone(context.Background(), name)
@@ -36,18 +35,19 @@ var createZoneCmd = &cobra.Command{
 			return err
 		}
 
-		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "ID\tNAME\tRECORD COUNT")
-		fmt.Fprintf(w, "%s\t%s\t%d\n", response.Zone.ID, response.Zone.Name, response.Zone.ResourceRecordSetCount)
-		w.Flush()
-		return nil
+		table := tablewriter.NewWriter(os.Stdout)
+		table.Header([]string{"ID", "NAME", "RECORD COUNT"})
+		_ = table.Append(
+			[]string{response.Zone.ID, response.Zone.Name, strconv.Itoa(response.Zone.ResourceRecordSetCount)},
+		)
+		return table.Render()
 	},
 }
 
 var listZonesCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all DNS zones",
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(cmd *cobra.Command, _ []string) error {
 		config, err := loadConfig()
 		if err != nil {
 			return err
@@ -60,26 +60,23 @@ var listZonesCmd = &cobra.Command{
 		}
 
 		if len(response.Zones) == 0 {
-			fmt.Println("No zones found")
+			cmd.Println("No zones found")
 			return nil
 		}
 
-		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "ID\tNAME\tRECORD COUNT")
-		fmt.Fprintln(w, "──\t────\t───────────")
+		table := tablewriter.NewWriter(os.Stdout)
+		table.Header([]string{"ID", "NAME", "RECORD COUNT"})
 		for _, zone := range response.Zones {
-			fmt.Fprintf(w, "%s\t%s\t%d\n", zone.ID, zone.Name, zone.ResourceRecordSetCount)
+			_ = table.Append([]string{zone.ID, zone.Name, strconv.Itoa(zone.ResourceRecordSetCount)})
 		}
-		w.Flush()
-
-		return nil
+		return table.Render()
 	},
 }
 
-var getZoneCmd = &cobra.Command{
-	Use:   "get",
+var describeZoneCmd = &cobra.Command{
+	Use:   "describe [zone-id]",
 	Short: "Get information about a specific zone",
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(cmd *cobra.Command, _ []string) error {
 		config, err := loadConfig()
 		if err != nil {
 			return err
@@ -96,22 +93,17 @@ var getZoneCmd = &cobra.Command{
 			return err
 		}
 
-		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "FIELD\tVALUE")
-		fmt.Fprintln(w, "─────\t─────")
-		fmt.Fprintf(w, "ID\t%s\n", zone.ID)
-		fmt.Fprintf(w, "Name\t%s\n", zone.Name)
-		fmt.Fprintf(w, "Record Count\t%d\n", zone.ResourceRecordSetCount)
-		w.Flush()
-
-		return nil
+		table := tablewriter.NewWriter(os.Stdout)
+		table.Header([]string{"ID", "NAME", "RECORD COUNT"})
+		_ = table.Append([]string{zone.ID, zone.Name, strconv.Itoa(zone.ResourceRecordSetCount)})
+		return table.Render()
 	},
 }
 
 var deleteZoneCmd = &cobra.Command{
-	Use:   "delete",
+	Use:   "delete [zone-id]",
 	Short: "Delete a DNS zone",
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(cmd *cobra.Command, _ []string) error {
 		config, err := loadConfig()
 		if err != nil {
 			return err
@@ -128,27 +120,14 @@ var deleteZoneCmd = &cobra.Command{
 			return err
 		}
 
-		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "FIELD\tVALUE")
-		fmt.Fprintln(w, "─────\t─────")
-		fmt.Fprintf(w, "Zone ID\t%s\n", zoneID)
-		fmt.Fprintf(w, "Change ID\t%s\n", response.ID)
-		w.Flush()
-
-		return nil
+		table := tablewriter.NewWriter(os.Stdout)
+		table.Header([]string{"ZONE ID", "CHANGE ID"})
+		_ = table.Append([]string{zoneID, response.ID})
+		return table.Render()
 	},
 }
 
 func init() {
-	createZoneCmd.Flags().String("name", "", "Name of the zone (e.g., example.com)")
-	createZoneCmd.MarkFlagRequired("name")
-
-	getZoneCmd.Flags().String("id", "", "ID of the zone")
-	getZoneCmd.MarkFlagRequired("id")
-
-	deleteZoneCmd.Flags().String("id", "", "ID of the zone")
-	deleteZoneCmd.MarkFlagRequired("id")
-
-	zonesCmd.AddCommand(createZoneCmd, listZonesCmd, getZoneCmd, deleteZoneCmd)
+	zonesCmd.AddCommand(createZoneCmd, listZonesCmd, describeZoneCmd, deleteZoneCmd)
 	rootCmd.AddCommand(zonesCmd)
 }

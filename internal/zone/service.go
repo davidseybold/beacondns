@@ -224,13 +224,13 @@ func (d *DefaultService) DeleteZone(ctx context.Context, id uuid.UUID) (*model.C
 	change := model.NewChangeWithZoneChange(zoneChange, model.ChangeStatusPending)
 
 	rawResult, err := d.registry.InTx(ctx, func(ctx context.Context, r repository.Registry) (any, error) {
-		err := r.GetZoneRepository().DeleteZone(ctx, id)
+		err = r.GetZoneRepository().DeleteZone(ctx, id)
 		if err != nil {
 			return nil, err
 		}
 
-		newChange, err := r.GetChangeRepository().CreateChange(ctx, change)
-		if err != nil {
+		newChange, createErr := r.GetChangeRepository().CreateChange(ctx, change)
+		if createErr != nil {
 			return nil, err
 		}
 

@@ -19,7 +19,6 @@ const (
 	RRTypeSSHFP RRType = "SSHFP"
 	RRTypeSVCB  RRType = "SVCB"
 	RRTypeTLSA  RRType = "TLSA"
-	RRTypeSPF   RRType = "SPF"
 	RRTypeSRV   RRType = "SRV"
 	RRTypeTXT   RRType = "TXT"
 	RRTypeNAPTR RRType = "NAPTR"
@@ -39,7 +38,6 @@ var SupportedRRTypes = map[RRType]struct{}{
 	RRTypeSSHFP: {},
 	RRTypeSVCB:  {},
 	RRTypeTLSA:  {},
-	RRTypeSPF:   {},
 	RRTypeSRV:   {},
 	RRTypeTXT:   {},
 	RRTypeNAPTR: {},

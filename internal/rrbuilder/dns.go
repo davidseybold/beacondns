@@ -1,4 +1,4 @@
-package parse
+package rrbuilder
 
 import (
 	"errors"
@@ -8,15 +8,16 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/davidseybold/beacondns/internal/model"
 	"github.com/miekg/dns"
+
+	"github.com/davidseybold/beacondns/internal/model"
 )
 
 const (
 	soaRecordFieldNumber           = 7
 	caaRecordFieldNumber           = 3
 	dsRecordFieldNumber            = 4
-	httpsRecordFieldNumber         = 2
+	svcbRecordFieldNumber          = 2
 	naptrRecordFieldNumber         = 6
 	srvRecordFieldNumber           = 4
 	sshfpRecordFieldNumber         = 3
@@ -24,6 +25,7 @@ const (
 	tlsaUsageMaxFieldNumber        = 3
 	tlsaSelectorMaxFieldNumber     = 1
 	tlsaMatchingTypeMaxFieldNumber = 2
+	mxRecordFieldNumber            = 2
 )
 
 var (
@@ -50,9 +52,6 @@ var (
 	ErrInvalidSRVPort               = errors.New("SRV port must be between 0 and 65535")
 	ErrInvalidSRVWeight             = errors.New("SRV weight must be between 0 and 65535")
 	ErrInvalidSRVPriority           = errors.New("SRV priority must be between 0 and 65535")
-	ErrInvalidNAPTRFlags            = errors.New("NAPTR flags must be quoted")
-	ErrInvalidNAPTRService          = errors.New("NAPTR service must be quoted")
-	ErrInvalidNAPTRRegexp           = errors.New("NAPTR regexp must be quoted")
 	ErrInvalidTXTValue              = errors.New("TXT value must be quoted")
 	ErrInvalidCAAValue              = errors.New("CAA value must be quoted")
 	ErrInvalidDSDigest              = errors.New("DS digest must be a valid hex string")
@@ -148,7 +147,6 @@ func CNAME(rrset model.ResourceRecordSet) ([]dns.RR, error) {
 
 	dnsRRs := make([]dns.RR, 0, len(rrset.ResourceRecords))
 	for _, rr := range rrset.ResourceRecords {
-
 		r := new(dns.CNAME)
 		r.Hdr = createHeader(rrset.Name, dns.TypeCNAME, rrset.TTL)
 
@@ -236,7 +234,7 @@ func MX(rrset model.ResourceRecordSet) ([]dns.RR, error) {
 		r.Hdr = createHeader(rrset.Name, dns.TypeMX, rrset.TTL)
 
 		parts := strings.Fields(rr.Value)
-		if len(parts) != 2 {
+		if len(parts) != mxRecordFieldNumber {
 			return nil, valueError(ErrInvalidMXFieldCount, rr.Value)
 		}
 
@@ -298,8 +296,8 @@ func NAPTR(rrset model.ResourceRecordSet) ([]dns.RR, error) {
 
 		replacement := parts[5]
 
-		r.Order = uint16(order)
-		r.Preference = uint16(pref)
+		r.Order = order
+		r.Preference = pref
 		r.Flags = flags
 		r.Service = service
 		r.Regexp = regexp
@@ -520,7 +518,7 @@ var svcbStringToKeyMap = map[string]dns.SVCBKey{
 
 func svcbValue(value string) (uint16, string, []dns.SVCBKeyValue, error) {
 	parts := strings.Fields(value)
-	if len(parts) < httpsRecordFieldNumber {
+	if len(parts) < svcbRecordFieldNumber {
 		return 0, "", nil, valueError(ErrSVCBRecordRequiredFieldCount, value)
 	}
 
@@ -532,97 +530,142 @@ func svcbValue(value string) (uint16, string, []dns.SVCBKeyValue, error) {
 	keyValues := make([]dns.SVCBKeyValue, 0, len(parts)-2)
 
 	for _, part := range parts[2:] {
-		if part == "no-default-alpn" {
-			keyValues = append(keyValues, &dns.SVCBNoDefaultAlpn{})
-			continue
+		keyValue, parseErr := parseSvcbKeyValues(part)
+		if parseErr != nil {
+			return 0, "", nil, parseErr
 		}
-
-		kvParts := strings.Split(part, "=")
-		if len(kvParts) != 2 {
-			return 0, "", nil, valueError(ErrSVCBInvalidKeyValue, value)
-		}
-
-		key := kvParts[0]
-		value := kvParts[1]
-
-		svcbKey, ok := svcbStringToKeyMap[key]
-		if !ok {
-			return 0, "", nil, valueError(ErrSVCBInvalidKeyValue, value)
-		}
-
-		switch svcbKey {
-		case dns.SVCB_ALPN:
-			s := strings.Trim(value, "\"")
-			alpnParts := strings.Split(s, ",")
-			alpn := make([]string, 0, len(alpnParts))
-			for _, alpnPart := range alpnParts {
-				alpn = append(alpn, strings.Trim(alpnPart, " "))
-			}
-			keyValues = append(keyValues, &dns.SVCBAlpn{
-				Alpn: alpn,
-			})
-		case dns.SVCB_PORT:
-			port, err := strconv.ParseUint(value, 10, 16)
-			if err != nil {
-				return 0, "", nil, valueError(ErrInvalidInteger, value)
-			}
-			keyValues = append(keyValues, &dns.SVCBPort{
-				Port: uint16(port),
-			})
-		case dns.SVCB_IPV4HINT:
-			tr := strings.Trim(value, "\"")
-			strIps := strings.Split(tr, ",")
-			ips := make([]net.IP, 0, len(strIps))
-			for _, strIp := range strIps {
-				ip := net.ParseIP(strIp)
-				if ip == nil || ip.To4() == nil {
-					return 0, "", nil, valueError(ErrInvalidIPv4Address, strIp)
-				}
-				ips = append(ips, ip)
-			}
-			keyValues = append(keyValues, &dns.SVCBIPv4Hint{
-				Hint: ips,
-			})
-		case dns.SVCB_IPV6HINT:
-			tr := strings.Trim(value, "\"")
-			strIps := strings.Split(tr, ",")
-			ips := make([]net.IP, 0, len(strIps))
-			for _, strIp := range strIps {
-				ip := net.ParseIP(strIp)
-				if ip == nil || ip.To16() == nil {
-					return 0, "", nil, valueError(ErrInvalidIPv6Address, strIp)
-				}
-				ips = append(ips, ip)
-			}
-			keyValues = append(keyValues, &dns.SVCBIPv6Hint{
-				Hint: ips,
-			})
-		case dns.SVCB_DOHPATH:
-			keyValues = append(keyValues, &dns.SVCBDoHPath{
-				Template: value,
-			})
-		case dns.SVCB_ECHCONFIG:
-			keyValues = append(keyValues, &dns.SVCBECHConfig{
-				ECH: []byte(value),
-			})
-		case dns.SVCB_OHTTP:
-			keyValues = append(keyValues, &dns.SVCBOhttp{})
-		case dns.SVCB_MANDATORY:
-			m := strings.Trim(value, "\"")
-			mandatoryParts := strings.Split(m, ",")
-			mandatoryCodes := make([]dns.SVCBKey, 0, len(mandatoryParts))
-			for _, part := range mandatoryParts {
-				code, ok := svcbStringToKeyMap[part]
-				if !ok || code == dns.SVCB_MANDATORY {
-					return 0, "", nil, valueError(ErrInvalidMandatoryKey, part)
-				}
-				mandatoryCodes = append(mandatoryCodes, code)
-			}
-			keyValues = append(keyValues, &dns.SVCBMandatory{Code: mandatoryCodes})
-		}
+		keyValues = append(keyValues, keyValue)
 	}
 
-	return uint16(priority), target, keyValues, nil
+	return priority, target, keyValues, nil
+}
+
+func parseSvcbKeyValues(part string) (dns.SVCBKeyValue, error) {
+	if part == "no-default-alpn" {
+		return &dns.SVCBNoDefaultAlpn{}, nil
+	}
+
+	kvParts := strings.Split(part, "=")
+	if len(kvParts) != 2 {
+		return nil, valueError(ErrSVCBInvalidKeyValue, part)
+	}
+
+	key := kvParts[0]
+	val := kvParts[1]
+
+	svcbKey, ok := svcbStringToKeyMap[key]
+	if !ok {
+		return nil, valueError(ErrSVCBInvalidKeyValue, part)
+	}
+
+	switch svcbKey {
+	case dns.SVCB_NO_DEFAULT_ALPN:
+		return &dns.SVCBNoDefaultAlpn{}, nil
+	case dns.SVCB_ALPN:
+		return parseAlpn(val), nil
+	case dns.SVCB_PORT:
+		port, err := parse16BitUint(val)
+		if err != nil {
+			return nil, valueError(ErrInvalidInteger, val)
+		}
+		return &dns.SVCBPort{
+			Port: port,
+		}, nil
+	case dns.SVCB_IPV4HINT:
+		ipv4Hint, err := parseIPv4Hint(val)
+		if err != nil {
+			return nil, err
+		}
+		return ipv4Hint, nil
+	case dns.SVCB_IPV6HINT:
+		ipv6Hint, err := parseIPv6Hint(val)
+		if err != nil {
+			return nil, err
+		}
+		return ipv6Hint, nil
+	case dns.SVCB_DOHPATH:
+		return &dns.SVCBDoHPath{
+			Template: val,
+		}, nil
+	case dns.SVCB_ECHCONFIG:
+		return &dns.SVCBECHConfig{
+			ECH: []byte(val),
+		}, nil
+	case dns.SVCB_OHTTP:
+		return &dns.SVCBOhttp{}, nil
+	case dns.SVCB_MANDATORY:
+		mandatory, err := parseMandatory(val)
+		if err != nil {
+			return nil, err
+		}
+		return mandatory, nil
+	}
+
+	return nil, valueError(ErrSVCBInvalidKeyValue, part)
+}
+
+func parseAlpn(val string) *dns.SVCBAlpn {
+	s := strings.Trim(val, "\"")
+	alpnParts := strings.Split(s, ",")
+	alpn := make([]string, 0, len(alpnParts))
+	for _, alpnPart := range alpnParts {
+		alpn = append(alpn, strings.Trim(alpnPart, " "))
+	}
+
+	return &dns.SVCBAlpn{
+		Alpn: alpn,
+	}
+}
+
+func parseIPv4Hint(val string) (*dns.SVCBIPv4Hint, error) {
+	tr := strings.Trim(val, "\"")
+	strIps := strings.Split(tr, ",")
+	ips := make([]net.IP, 0, len(strIps))
+	for _, strIP := range strIps {
+		ip := net.ParseIP(strIP)
+		if ip == nil || ip.To4() == nil {
+			return nil, valueError(ErrInvalidIPv4Address, strIP)
+		}
+		ips = append(ips, ip)
+	}
+
+	return &dns.SVCBIPv4Hint{
+		Hint: ips,
+	}, nil
+}
+
+func parseIPv6Hint(val string) (*dns.SVCBIPv6Hint, error) {
+	tr := strings.Trim(val, "\"")
+	strIps := strings.Split(tr, ",")
+	ips := make([]net.IP, 0, len(strIps))
+	for _, strIP := range strIps {
+		ip := net.ParseIP(strIP)
+		if ip == nil || ip.To16() == nil {
+			return nil, valueError(ErrInvalidIPv6Address, strIP)
+		}
+		ips = append(ips, ip)
+	}
+
+	return &dns.SVCBIPv6Hint{
+		Hint: ips,
+	}, nil
+}
+
+func parseMandatory(val string) (*dns.SVCBMandatory, error) {
+	m := strings.Trim(val, "\"")
+	mandatoryParts := strings.Split(m, ",")
+	mandatoryCodes := make([]dns.SVCBKey, 0, len(mandatoryParts))
+	for _, part := range mandatoryParts {
+		code, ok := svcbStringToKeyMap[part]
+		if !ok || code == dns.SVCB_MANDATORY {
+			return nil, valueError(ErrInvalidMandatoryKey, part)
+		}
+		mandatoryCodes = append(mandatoryCodes, code)
+	}
+
+	return &dns.SVCBMandatory{
+		Code: mandatoryCodes,
+	}, nil
 }
 
 func TLSA(rrset model.ResourceRecordSet) ([]dns.RR, error) {
@@ -752,7 +795,6 @@ func txtValue(value string) ([]string, error) {
 	}
 
 	return results, nil
-
 }
 
 func valueError(err error, value string) error {

@@ -1,13 +1,14 @@
 package zone
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/miekg/dns"
 
 	"github.com/davidseybold/beacondns/internal/model"
-	"github.com/davidseybold/beacondns/internal/parse"
+	"github.com/davidseybold/beacondns/internal/rrbuilder"
 )
 
 type rule func(zone *model.Zone, changes []model.ResourceRecordSetChange) error
@@ -85,7 +86,7 @@ func soaRule(zone *model.Zone, changes []model.ResourceRecordSetChange) error {
 			return fmt.Errorf("cannot add SOA record: zone %s already has an SOA record", zone.Name)
 		}
 		if len(change.ResourceRecordSet.ResourceRecords) > 1 {
-			return fmt.Errorf("SOA record can only have one resource record")
+			return errors.New("SOA record can only have one resource record")
 		}
 	}
 
@@ -168,7 +169,7 @@ func apexRecordRule(zone *model.Zone, changes []model.ResourceRecordSetChange) e
 	return nil
 }
 
-func supportedRRTypeRule(zone *model.Zone, changes []model.ResourceRecordSetChange) error {
+func supportedRRTypeRule(_ *model.Zone, changes []model.ResourceRecordSetChange) error {
 	for _, change := range changes {
 		if _, ok := model.SupportedRRTypes[change.ResourceRecordSet.Type]; !ok {
 			return fmt.Errorf("invalid record type %s: only supported types are %v",
@@ -181,8 +182,8 @@ func supportedRRTypeRule(zone *model.Zone, changes []model.ResourceRecordSetChan
 	return nil
 }
 
-// ttlRule ensures TTL values are within valid range
-func ttlRule(zone *model.Zone, changes []model.ResourceRecordSetChange) error {
+// ttlRule ensures TTL values are within valid range.
+func ttlRule(_ *model.Zone, changes []model.ResourceRecordSetChange) error {
 	const (
 		minTTL = 0
 		maxTTL = 2147483647 // 2^31 - 1
@@ -197,53 +198,73 @@ func ttlRule(zone *model.Zone, changes []model.ResourceRecordSetChange) error {
 	return nil
 }
 
-func recordValueRule(zone *model.Zone, changes []model.ResourceRecordSetChange) error {
+func recordValueRule(_ *model.Zone, changes []model.ResourceRecordSetChange) error {
 	for _, change := range changes {
 		var err error
 		switch change.ResourceRecordSet.Type {
 		case model.RRTypeA:
-			_, err = parse.A(change.ResourceRecordSet)
+			_, err = rrbuilder.A(change.ResourceRecordSet)
 		case model.RRTypeAAAA:
-			_, err = parse.AAAA(change.ResourceRecordSet)
+			_, err = rrbuilder.AAAA(change.ResourceRecordSet)
 		case model.RRTypeMX:
-			_, err = parse.MX(change.ResourceRecordSet)
+			_, err = rrbuilder.MX(change.ResourceRecordSet)
 		case model.RRTypeSRV:
-			_, err = parse.SRV(change.ResourceRecordSet)
+			_, err = rrbuilder.SRV(change.ResourceRecordSet)
 		case model.RRTypeCNAME:
-			_, err = parse.CNAME(change.ResourceRecordSet)
+			_, err = rrbuilder.CNAME(change.ResourceRecordSet)
 		case model.RRTypeTXT:
-			_, err = parse.TXT(change.ResourceRecordSet)
+			_, err = rrbuilder.TXT(change.ResourceRecordSet)
 		case model.RRTypeSOA:
-			_, err = parse.SOA(change.ResourceRecordSet)
+			_, err = rrbuilder.SOA(change.ResourceRecordSet)
 		case model.RRTypeNS:
-			_, err = parse.NS(change.ResourceRecordSet)
+			_, err = rrbuilder.NS(change.ResourceRecordSet)
 		case model.RRTypePTR:
-			_, err = parse.PTR(change.ResourceRecordSet)
+			_, err = rrbuilder.PTR(change.ResourceRecordSet)
+		case model.RRTypeCAA:
+			_, err = rrbuilder.CAA(change.ResourceRecordSet)
+		case model.RRTypeDS:
+			_, err = rrbuilder.DS(change.ResourceRecordSet)
+		case model.RRTypeSSHFP:
+			_, err = rrbuilder.SSHFP(change.ResourceRecordSet)
+		case model.RRTypeTLSA:
+			_, err = rrbuilder.TLSA(change.ResourceRecordSet)
+		case model.RRTypeSVCB:
+			_, err = rrbuilder.SVCB(change.ResourceRecordSet)
+		case model.RRTypeHTTPS:
+			_, err = rrbuilder.HTTPS(change.ResourceRecordSet)
+		case model.RRTypeNAPTR:
+			_, err = rrbuilder.NAPTR(change.ResourceRecordSet)
 		}
 		if err != nil {
-			return fmt.Errorf("invalid record value: %s", err)
+			return fmt.Errorf("invalid record value: %w", err)
 		}
 	}
 	return nil
 }
 
-// domainNameRule ensures domain names are valid
+// domainNameRule ensures domain names are valid.
 func domainNameRule(zone *model.Zone, changes []model.ResourceRecordSetChange) error {
 	for _, change := range changes {
 		// Check if the record name is a valid domain name
 		if !dns.IsFqdn(change.ResourceRecordSet.Name) {
-			return fmt.Errorf("invalid domain name: %s is not a fully qualified domain name", change.ResourceRecordSet.Name)
+			return fmt.Errorf(
+				"invalid domain name: %s is not a fully qualified domain name",
+				change.ResourceRecordSet.Name,
+			)
 		}
 
-		// Check if the record name is within the zone
+		// Check if the record name is within the zone.
 		if !strings.HasSuffix(change.ResourceRecordSet.Name, dns.Fqdn(zone.Name)) {
 			return fmt.Errorf("invalid domain name: %s is not within zone %s", change.ResourceRecordSet.Name, zone.Name)
 		}
 
-		// Check for wildcard records
+		// Check for wildcard records.
 		if strings.Contains(change.ResourceRecordSet.Name, "*") {
 			if !strings.HasPrefix(change.ResourceRecordSet.Name, "*. ") {
-				return fmt.Errorf("invalid wildcard record: %s (wildcard must be at the leftmost label)", change.ResourceRecordSet.Name)
+				return fmt.Errorf(
+					"invalid wildcard record: %s (wildcard must be at the leftmost label)",
+					change.ResourceRecordSet.Name,
+				)
 			}
 		}
 	}

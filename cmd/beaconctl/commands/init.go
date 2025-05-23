@@ -2,6 +2,7 @@ package commands
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -17,14 +18,14 @@ var initCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Initialize beaconctl configuration",
 	Long:  `Initialize beaconctl by setting the host URL for the Beacon DNS API.`,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(cmd *cobra.Command, _ []string) error {
 		host, err := cmd.Flags().GetString("host")
 		if err != nil {
 			return err
 		}
 
 		if host == "" {
-			return fmt.Errorf("host URL is required")
+			return errors.New("host URL is required")
 		}
 
 		configDir, err := getConfigDir()
@@ -42,22 +43,21 @@ var initCmd = &cobra.Command{
 			return fmt.Errorf("failed to marshal config: %w", err)
 		}
 
-		if err := os.WriteFile(configFile, data, 0644); err != nil {
+		if err = os.WriteFile(configFile, data, 0600); err != nil {
 			return fmt.Errorf("failed to write config file: %w", err)
 		}
 
-		fmt.Printf("Configuration saved to %s\n", configFile)
+		cmd.Printf("Configuration saved to %s\n", configFile)
 		return nil
 	},
 }
 
 func init() {
 	initCmd.Flags().String("host", "", "Host URL for the Beacon DNS API (e.g., http://localhost:8080)")
-	initCmd.MarkFlagRequired("host")
+	_ = initCmd.MarkFlagRequired("host")
 	rootCmd.AddCommand(initCmd)
 }
 
-// loadConfig loads the configuration from the config file
 func loadConfig() (*Config, error) {
 	configDir, err := getConfigDir()
 	if err != nil {
@@ -71,7 +71,7 @@ func loadConfig() (*Config, error) {
 	}
 
 	var config Config
-	if err := json.Unmarshal(data, &config); err != nil {
+	if err = json.Unmarshal(data, &config); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 

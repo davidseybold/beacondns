@@ -2,16 +2,17 @@ package commands
 
 import (
 	"context"
-	"fmt"
 	"os"
-	"text/tabwriter"
+	"strconv"
+
+	"github.com/olekukonko/tablewriter"
+	"github.com/spf13/cobra"
 
 	"github.com/davidseybold/beacondns/client"
-	"github.com/spf13/cobra"
 )
 
 var recordsCmd = &cobra.Command{
-	Use:   "records",
+	Use:   "record-sets",
 	Short: "Manage DNS records",
 	Long:  `Commands for managing DNS resource record sets in Beacon.`,
 }
@@ -19,7 +20,7 @@ var recordsCmd = &cobra.Command{
 var listRecordsCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all resource record sets in a zone",
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(cmd *cobra.Command, _ []string) error {
 		config, err := loadConfig()
 		if err != nil {
 			return err
@@ -37,13 +38,12 @@ var listRecordsCmd = &cobra.Command{
 		}
 
 		if len(response.ResourceRecordSets) == 0 {
-			fmt.Println("No records found")
+			cmd.Println("No records found")
 			return nil
 		}
 
-		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "NAME\tTYPE\tTTL\tVALUES")
-		fmt.Fprintln(w, "────\t────\t───\t──────")
+		table := tablewriter.NewWriter(os.Stdout)
+		table.Header([]string{"NAME", "TYPE", "TTL", "VALUES"})
 		for _, rrset := range response.ResourceRecordSets {
 			values := ""
 			for i, record := range rrset.ResourceRecords {
@@ -52,19 +52,18 @@ var listRecordsCmd = &cobra.Command{
 				}
 				values += record.Value
 			}
-			fmt.Fprintf(w, "%s\t%s\t%d\t%s\n", rrset.Name, rrset.Type, rrset.TTL, values)
+			_ = table.Append([]string{rrset.Name, rrset.Type, strconv.Itoa(int(rrset.TTL)), values})
 		}
-		w.Flush()
-
-		return nil
+		return table.Render()
 	},
 }
 
 var createRecordCmd = &cobra.Command{
-	Use:   "create",
+	Use:   "create [name]",
 	Short: "Create a new resource record set",
 	Long: `Create a new resource record set in a zone.
-Example: beaconctl records create --zone-id 123 --name www.example.com --type A --ttl 300 --value 192.0.2.1`,
+Example: beaconctl records create www.example.com --zone-id 123 --type A --ttl 300 --value 192.0.2.1`,
+	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		config, err := loadConfig()
 		if err != nil {
@@ -72,11 +71,6 @@ Example: beaconctl records create --zone-id 123 --name www.example.com --type A 
 		}
 
 		zoneID, err := cmd.Flags().GetString("zone-id")
-		if err != nil {
-			return err
-		}
-
-		name, err := cmd.Flags().GetString("name")
 		if err != nil {
 			return err
 		}
@@ -95,6 +89,8 @@ Example: beaconctl records create --zone-id 123 --name www.example.com --type A 
 		if err != nil {
 			return err
 		}
+
+		name := args[0]
 
 		changes := []client.Change{
 			{
@@ -116,26 +112,19 @@ Example: beaconctl records create --zone-id 123 --name www.example.com --type A 
 			return err
 		}
 
-		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "FIELD\tVALUE")
-		fmt.Fprintln(w, "─────\t─────")
-		fmt.Fprintf(w, "Zone ID\t%s\n", zoneID)
-		fmt.Fprintf(w, "Name\t%s\n", name)
-		fmt.Fprintf(w, "Type\t%s\n", recordType)
-		fmt.Fprintf(w, "TTL\t%d\n", ttl)
-		fmt.Fprintf(w, "Value\t%s\n", value)
-		fmt.Fprintf(w, "Change ID\t%s\n", changeInfo.ID)
-		w.Flush()
-
-		return nil
+		table := tablewriter.NewWriter(os.Stdout)
+		table.Header([]string{"ZONE ID", "NAME", "TYPE", "TTL", "VALUE", "CHANGE ID"})
+		_ = table.Append([]string{zoneID, name, recordType, strconv.Itoa(int(ttl)), value, changeInfo.ID})
+		return table.Render()
 	},
 }
 
 var deleteRecordCmd = &cobra.Command{
-	Use:   "delete",
+	Use:   "delete [name]",
 	Short: "Delete a resource record set",
 	Long: `Delete a resource record set from a zone.
-Example: beaconctl records delete --zone-id 123 --name www.example.com --type A`,
+Example: beaconctl records delete www.example.com --zone-id 123 --type A`,
+	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		config, err := loadConfig()
 		if err != nil {
@@ -147,15 +136,12 @@ Example: beaconctl records delete --zone-id 123 --name www.example.com --type A`
 			return err
 		}
 
-		name, err := cmd.Flags().GetString("name")
-		if err != nil {
-			return err
-		}
-
 		recordType, err := cmd.Flags().GetString("type")
 		if err != nil {
 			return err
 		}
+
+		name := args[0]
 
 		changes := []client.Change{
 			{
@@ -173,39 +159,33 @@ Example: beaconctl records delete --zone-id 123 --name www.example.com --type A`
 			return err
 		}
 
-		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-		fmt.Fprintln(w, "FIELD\tVALUE")
-		fmt.Fprintln(w, "─────\t─────")
-		fmt.Fprintf(w, "Zone ID\t%s\n", zoneID)
-		fmt.Fprintf(w, "Name\t%s\n", name)
-		fmt.Fprintf(w, "Type\t%s\n", recordType)
-		fmt.Fprintf(w, "Change ID\t%s\n", changeInfo.ID)
-		w.Flush()
-
-		return nil
+		table := tablewriter.NewWriter(os.Stdout)
+		table.Header([]string{"ZONE ID", "NAME", "TYPE", "CHANGE ID"})
+		_ = table.Append([]string{zoneID, name, recordType, changeInfo.ID})
+		return table.Render()
 	},
 }
 
 func init() {
-	listRecordsCmd.Flags().String("zone-id", "", "ID of the zone")
-	listRecordsCmd.MarkFlagRequired("zone-id")
+	listRecordsFlags := []flagFunc{
+		zoneIDFlag(true),
+	}
 
-	createRecordCmd.Flags().String("zone-id", "", "ID of the zone")
-	createRecordCmd.Flags().String("name", "", "Name of the record (e.g., www.example.com)")
-	createRecordCmd.Flags().String("type", "", "Type of the record (e.g., A, AAAA, CNAME, MX)")
-	createRecordCmd.Flags().Uint32("ttl", 300, "Time to live in seconds")
-	createRecordCmd.Flags().String("value", "", "Value of the record")
-	createRecordCmd.MarkFlagRequired("zone-id")
-	createRecordCmd.MarkFlagRequired("name")
-	createRecordCmd.MarkFlagRequired("type")
-	createRecordCmd.MarkFlagRequired("value")
+	createRecordFlags := []flagFunc{
+		zoneIDFlag(true),
+		typeFlag(true),
+		ttlFlag(false),
+		valueFlag(true),
+	}
 
-	deleteRecordCmd.Flags().String("zone-id", "", "ID of the zone")
-	deleteRecordCmd.Flags().String("name", "", "Name of the record")
-	deleteRecordCmd.Flags().String("type", "", "Type of the record")
-	deleteRecordCmd.MarkFlagRequired("zone-id")
-	deleteRecordCmd.MarkFlagRequired("name")
-	deleteRecordCmd.MarkFlagRequired("type")
+	deleteRecordFlags := []flagFunc{
+		zoneIDFlag(true),
+		typeFlag(true),
+	}
+
+	addFlags(listRecordsFlags, listRecordsCmd)
+	addFlags(createRecordFlags, createRecordCmd)
+	addFlags(deleteRecordFlags, deleteRecordCmd)
 
 	recordsCmd.AddCommand(listRecordsCmd, createRecordCmd, deleteRecordCmd)
 	rootCmd.AddCommand(recordsCmd)

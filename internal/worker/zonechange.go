@@ -2,18 +2,13 @@ package worker
 
 import (
 	"context"
-	"net"
-	"strconv"
-	"strings"
+	"fmt"
 
 	"github.com/miekg/dns"
 
 	"github.com/davidseybold/beacondns/internal/dnsstore"
 	"github.com/davidseybold/beacondns/internal/model"
-)
-
-const (
-	soaRecordFieldNumber = 7
+	"github.com/davidseybold/beacondns/internal/rrbuilder"
 )
 
 func (w *Worker) processZoneChange(ctx context.Context, change *model.Change) error {
@@ -28,148 +23,65 @@ func (w *Worker) processZoneChange(ctx context.Context, change *model.Change) er
 	tx.CreateZoneMarker()
 
 	for _, ch := range zoneChange.Changes {
-		processResourceRecordSetChange(tx, ch)
+		if err := processResourceRecordSetChange(tx, ch); err != nil {
+			return err
+		}
 	}
 
 	return tx.Commit()
 }
 
-func processResourceRecordSetChange(tx dnsstore.ZoneTransaction, change model.ResourceRecordSetChange) {
+func processResourceRecordSetChange(tx dnsstore.ZoneTransaction, change model.ResourceRecordSetChange) error {
 	if change.Action == model.RRSetChangeActionDelete {
 		tx.DeleteRRSet(change.ResourceRecordSet.Name, string(change.ResourceRecordSet.Type))
-		return
+		return nil
 	}
 
-	rrset := newDNSRecordSet(change.ResourceRecordSet)
+	rrset, err := parseDNSRecordSet(change.ResourceRecordSet)
+	if err != nil {
+		return err
+	}
 
 	tx.PutRRSet(change.ResourceRecordSet.Name, string(change.ResourceRecordSet.Type), rrset)
-}
-
-func newDNSRecordSet(rrset model.ResourceRecordSet) []dns.RR {
-	switch rrset.Type {
-	case model.RRTypeA:
-		return newARecordSet(rrset)
-	case model.RRTypeAAAA:
-		return newAAAARecordSet(rrset)
-	case model.RRTypeCNAME:
-		return newCNAMERecordSet(rrset)
-	case model.RRTypeSOA:
-		return newSOARecordSet(rrset)
-	case model.RRTypeNS:
-		return newNSRecordSet(rrset)
-	}
 
 	return nil
 }
 
-func newARecordSet(rrset model.ResourceRecordSet) []dns.RR {
-	dnsRRs := make([]dns.RR, 0, len(rrset.ResourceRecords))
-	for _, rr := range rrset.ResourceRecords {
-		r := new(dns.A)
-		r.Hdr = dns.RR_Header{
-			Name:   dns.Fqdn(rrset.Name),
-			Rrtype: dns.TypeA,
-			Class:  dns.ClassINET,
-			Ttl:    rrset.TTL,
-		}
-		ip := net.ParseIP(rr.Value)
-		if ip == nil || ip.To4() == nil {
-			continue
-		}
-
-		r.A = ip
-		dnsRRs = append(dnsRRs, r)
+func parseDNSRecordSet(rrset model.ResourceRecordSet) ([]dns.RR, error) {
+	switch rrset.Type {
+	case model.RRTypeA:
+		return rrbuilder.A(rrset)
+	case model.RRTypeAAAA:
+		return rrbuilder.AAAA(rrset)
+	case model.RRTypeCNAME:
+		return rrbuilder.CNAME(rrset)
+	case model.RRTypeSOA:
+		return rrbuilder.SOA(rrset)
+	case model.RRTypeNS:
+		return rrbuilder.NS(rrset)
+	case model.RRTypeSRV:
+		return rrbuilder.SRV(rrset)
+	case model.RRTypeSVCB:
+		return rrbuilder.SVCB(rrset)
+	case model.RRTypeHTTPS:
+		return rrbuilder.HTTPS(rrset)
+	case model.RRTypeNAPTR:
+		return rrbuilder.NAPTR(rrset)
+	case model.RRTypeSSHFP:
+		return rrbuilder.SSHFP(rrset)
+	case model.RRTypeTLSA:
+		return rrbuilder.TLSA(rrset)
+	case model.RRTypeTXT:
+		return rrbuilder.TXT(rrset)
+	case model.RRTypeCAA:
+		return rrbuilder.CAA(rrset)
+	case model.RRTypeDS:
+		return rrbuilder.DS(rrset)
+	case model.RRTypePTR:
+		return rrbuilder.PTR(rrset)
+	case model.RRTypeMX:
+		return rrbuilder.MX(rrset)
 	}
 
-	return dnsRRs
-}
-
-func newNSRecordSet(rrset model.ResourceRecordSet) []dns.RR {
-	dnsRRs := make([]dns.RR, 0, len(rrset.ResourceRecords))
-	for _, rr := range rrset.ResourceRecords {
-		r := new(dns.NS)
-		r.Hdr = dns.RR_Header{
-			Name:   dns.Fqdn(rrset.Name),
-			Rrtype: dns.TypeNS,
-			Class:  dns.ClassINET,
-			Ttl:    rrset.TTL,
-		}
-		r.Ns = dns.Fqdn(rr.Value)
-		dnsRRs = append(dnsRRs, r)
-	}
-
-	return dnsRRs
-}
-
-func newCNAMERecordSet(rrset model.ResourceRecordSet) []dns.RR {
-	dnsRRs := make([]dns.RR, 0, len(rrset.ResourceRecords))
-	for _, rr := range rrset.ResourceRecords {
-		r := new(dns.CNAME)
-		r.Hdr = dns.RR_Header{
-			Name:   dns.Fqdn(rrset.Name),
-			Rrtype: dns.TypeCNAME,
-			Class:  dns.ClassINET,
-			Ttl:    rrset.TTL,
-		}
-		r.Target = dns.Fqdn(rr.Value)
-		dnsRRs = append(dnsRRs, r)
-	}
-
-	return dnsRRs
-}
-
-func newSOARecordSet(rrset model.ResourceRecordSet) []dns.RR {
-	dnsRRs := make([]dns.RR, 0, len(rrset.ResourceRecords))
-	for _, rr := range rrset.ResourceRecords {
-		r := new(dns.SOA)
-		r.Hdr = dns.RR_Header{
-			Name:   dns.Fqdn(rrset.Name),
-			Rrtype: dns.TypeSOA,
-			Class:  dns.ClassINET,
-			Ttl:    rrset.TTL,
-		}
-
-		parts := strings.Fields(rr.Value)
-		if len(parts) != soaRecordFieldNumber {
-			continue
-		}
-
-		r.Ns = dns.Fqdn(parts[0])
-		r.Mbox = dns.Fqdn(parts[1])
-		serial, _ := strconv.ParseUint(parts[2], 10, 32)
-		r.Serial = uint32(serial)
-		refresh, _ := strconv.ParseUint(parts[3], 10, 32)
-		r.Refresh = uint32(refresh)
-		retry, _ := strconv.ParseUint(parts[4], 10, 32)
-		r.Retry = uint32(retry)
-		expire, _ := strconv.ParseUint(parts[5], 10, 32)
-		r.Expire = uint32(expire)
-		minttl, _ := strconv.ParseUint(parts[6], 10, 32)
-		r.Minttl = uint32(minttl)
-
-		dnsRRs = append(dnsRRs, r)
-	}
-
-	return dnsRRs
-}
-
-func newAAAARecordSet(rrset model.ResourceRecordSet) []dns.RR {
-	dnsRRs := make([]dns.RR, 0, len(rrset.ResourceRecords))
-	for _, rr := range rrset.ResourceRecords {
-		r := new(dns.AAAA)
-		r.Hdr = dns.RR_Header{
-			Name:   dns.Fqdn(rrset.Name),
-			Rrtype: dns.TypeAAAA,
-			Class:  dns.ClassINET,
-			Ttl:    rrset.TTL,
-		}
-		ip := net.ParseIP(rr.Value)
-		if ip == nil || ip.To16() == nil {
-			continue
-		}
-		r.AAAA = ip
-		dnsRRs = append(dnsRRs, r)
-	}
-
-	return dnsRRs
+	return nil, fmt.Errorf("invalid record type: %s", rrset.Type)
 }

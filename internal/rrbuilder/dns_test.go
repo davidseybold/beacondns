@@ -1,12 +1,13 @@
-package parse
+package rrbuilder
 
 import (
 	"net"
 	"testing"
 
-	"github.com/davidseybold/beacondns/internal/model"
 	"github.com/miekg/dns"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/davidseybold/beacondns/internal/model"
 )
 
 func TestA(t *testing.T) {
@@ -895,7 +896,9 @@ func TestHTTPS(t *testing.T) {
 				Type: "HTTPS",
 				TTL:  300,
 				ResourceRecords: []model.ResourceRecord{
-					{Value: `1 . alpn="h2,h3" port=443 ipv4hint="192.168.1.1,192.168.1.2" ipv6hint="2001:db8::1,2001:db8::2" mandatory="alpn,port,ipv4hint,ipv6hint" no-default-alpn`},
+					{
+						Value: `1 . alpn="h2,h3" port=443 ipv4hint="192.168.1.1,192.168.1.2" ipv6hint="2001:db8::1,2001:db8::2" mandatory="alpn,port,ipv4hint,ipv6hint" no-default-alpn`,
+					},
 				},
 			},
 			want: []dns.RR{
@@ -1092,7 +1095,7 @@ func TestNAPTR(t *testing.T) {
 				Type: "NAPTR",
 				TTL:  300,
 				ResourceRecords: []model.ResourceRecord{
-					{Value: "100 50 \"s\" \"http+I2L+I2C+I2R\" \"\" _http._tcp.example.com."},
+					{Value: "100 50 \"s\" \"http+I2L+I2C+I2R\" \"\" ."},
 				},
 			},
 			want: []dns.RR{
@@ -1108,7 +1111,7 @@ func TestNAPTR(t *testing.T) {
 					Flags:       "s",
 					Service:     "http+I2L+I2C+I2R",
 					Regexp:      "",
-					Replacement: "_http._tcp.example.com.",
+					Replacement: ".",
 				},
 			},
 			wantErr: nil,
@@ -1263,7 +1266,9 @@ func TestSVCB(t *testing.T) {
 				Type: "SVCB",
 				TTL:  300,
 				ResourceRecords: []model.ResourceRecord{
-					{Value: "1 . alpn=h2,h3 port=443 ipv4hint=\"192.168.1.1,192.168.1.2\" ipv6hint=\"2001:db8::1,2001:db8::2\" mandatory=alpn,port,ipv4hint,ipv6hint no-default-alpn"},
+					{
+						Value: "1 . alpn=h2,h3 port=443 ipv4hint=\"192.168.1.1,192.168.1.2\" ipv6hint=\"2001:db8::1,2001:db8::2\" mandatory=alpn,port,ipv4hint,ipv6hint no-default-alpn",
+					},
 				},
 			},
 			want: []dns.RR{
