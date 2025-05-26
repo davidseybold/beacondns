@@ -1,18 +1,15 @@
 package api
 
-import "github.com/davidseybold/beacondns/internal/model"
+import (
+	"strings"
 
-func convertAPIChangeToModel(change Change) model.ResourceRecordSetChange {
-	return model.ResourceRecordSetChange{
-		Action:            model.RRSetChangeAction(change.Action),
-		ResourceRecordSet: convertAPIResourceRecordSetToModel(change.ResourceRecordSet),
-	}
-}
+	"github.com/davidseybold/beacondns/internal/model"
+)
 
 func convertAPIResourceRecordSetToModel(recordSet ResourceRecordSet) model.ResourceRecordSet {
 	return model.ResourceRecordSet{
 		Name:            recordSet.Name,
-		Type:            model.RRType(recordSet.Type),
+		Type:            model.RRType(strings.ToUpper(recordSet.Type)),
 		TTL:             recordSet.TTL,
 		ResourceRecords: convertAPIResourceRecordsToModel(recordSet.ResourceRecords),
 	}
@@ -26,4 +23,33 @@ func convertAPIResourceRecordsToModel(records []ResourceRecord) []model.Resource
 		})
 	}
 	return modelRecords
+}
+
+func convertModelResourceRecordSetToAPI(rrSet model.ResourceRecordSet) ResourceRecordSet {
+	return ResourceRecordSet{
+		Name:            rrSet.Name,
+		Type:            strings.ToUpper(string(rrSet.Type)),
+		TTL:             rrSet.TTL,
+		ResourceRecords: convertModelResourceRecordsToAPI(rrSet.ResourceRecords),
+	}
+}
+
+func convertModelResourceRecordsToAPI(records []model.ResourceRecord) []ResourceRecord {
+	var apiRecords []ResourceRecord
+	for _, record := range records {
+		apiRecords = append(apiRecords, ResourceRecord{
+			Value: record.Value,
+		})
+	}
+	return apiRecords
+}
+
+func convertModelResponsePolicyToAPI(policy model.ResponsePolicy) ResponsePolicy {
+	return ResponsePolicy{
+		ID:          policy.ID.String(),
+		Name:        policy.Name,
+		Description: policy.Description,
+		Priority:    policy.Priority,
+		Enabled:     policy.Enabled,
+	}
 }

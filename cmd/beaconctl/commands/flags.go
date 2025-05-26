@@ -14,12 +14,10 @@ func addFlags(flags []flagFunc, cmd *cobra.Command) {
 	}
 }
 
-func zoneIDFlag(required bool) flagFunc {
+func zoneIDFlag() flagFunc {
 	return func(cmd *cobra.Command) {
 		cmd.Flags().StringP("zone-id", "z", "", "ID of the zone")
-		if required {
-			_ = cmd.MarkFlagRequired("zone-id")
-		}
+		_ = cmd.MarkFlagRequired("zone-id")
 	}
 }
 

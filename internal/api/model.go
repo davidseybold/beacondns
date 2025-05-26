@@ -1,11 +1,5 @@
 package api
 
-type ChangeInfo struct {
-	ID          string `json:"id"`
-	Status      string `json:"status"`
-	SubmittedAt string `json:"submittedAt"`
-}
-
 type ErrorResponse struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
@@ -21,11 +15,6 @@ type Zone struct {
 	ResourceRecordSetCount int    `json:"resourceRecordSetCount"`
 }
 
-type CreateZoneResponse struct {
-	ChangeInfo ChangeInfo `json:"changeInfo"`
-	Zone       Zone       `json:"zone"`
-}
-
 type ListZonesResponse struct {
 	Zones []Zone `json:"zones"`
 }
@@ -34,13 +23,8 @@ type ListResourceRecordSetsResponse struct {
 	ResourceRecordSets []ResourceRecordSet `json:"resourceRecordSets"`
 }
 
-type ChangeResourceRecordSetsRequest struct {
-	Changes []Change `json:"changes"`
-}
-
-type Change struct {
-	Action            string            `json:"action"`
-	ResourceRecordSet ResourceRecordSet `json:"resourceRecordSet"`
+type UpsertResourceRecordSetRequest struct {
+	ResourceRecordSet
 }
 
 type ResourceRecordSet struct {
@@ -52,4 +36,84 @@ type ResourceRecordSet struct {
 
 type ResourceRecord struct {
 	Value string `json:"value"`
+}
+
+type ResponsePolicy struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Priority    uint   `json:"priority"`
+	Enabled     bool   `json:"enabled"`
+}
+
+type ResponsePolicyRule struct {
+	ID           string              `json:"id"`
+	Name         string              `json:"name"`
+	TriggerType  string              `json:"triggerType"`
+	TriggerValue string              `json:"triggerValue"`
+	ActionType   string              `json:"actionType"`
+	LocalData    []ResourceRecordSet `json:"localData"`
+}
+
+type CreateResponsePolicyRequest struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Priority    uint   `json:"priority"`
+	Enabled     bool   `json:"enabled"`
+}
+
+type CreateResponsePolicyResponse struct {
+	ResponsePolicy
+}
+
+type CreateResponsePolicyRuleRequest struct {
+	Name         string              `json:"name"`
+	TriggerType  string              `json:"triggerType"`
+	TriggerValue string              `json:"triggerValue"`
+	ActionType   string              `json:"actionType"`
+	LocalData    []ResourceRecordSet `json:"localData"`
+}
+
+type CreateResponsePolicyRuleResponse struct {
+	ResponsePolicyRule
+}
+
+type ListResponsePoliciesResponse struct {
+	ResponsePolicies []ResponsePolicy `json:"responsePolicies"`
+}
+
+type GetResponsePolicyResponse struct {
+	ResponsePolicy
+}
+
+type ListResponsePolicyRulesResponse struct {
+	ResponsePolicyRules []ResponsePolicyRule `json:"responsePolicyRules"`
+}
+
+type GetResponsePolicyRuleResponse struct {
+	ResponsePolicyRule
+}
+
+type UpdateResponsePolicyRequest struct {
+	Name         string              `json:"name"`
+	TriggerType  string              `json:"triggerType"`
+	TriggerValue string              `json:"triggerValue"`
+	ActionType   string              `json:"actionType"`
+	LocalData    []ResourceRecordSet `json:"localData"`
+}
+
+type UpdateResponsePolicyResponse struct {
+	ResponsePolicy
+}
+
+type UpdateResponsePolicyRuleRequest struct {
+	Name         string              `json:"name"`
+	TriggerType  string              `json:"triggerType"`
+	TriggerValue string              `json:"triggerValue"`
+	ActionType   string              `json:"actionType"`
+	LocalData    []ResourceRecordSet `json:"localData"`
+}
+
+type UpdateResponsePolicyRuleResponse struct {
+	ResponsePolicyRule
 }

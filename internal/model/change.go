@@ -9,35 +9,44 @@ import (
 type ChangeType string
 
 const (
-	ChangeTypeZone ChangeType = "ZONE"
+	ChangeTypeZone           ChangeType = "ZONE"
+	ChangeTypeResponsePolicy ChangeType = "RESPONSE_POLICY"
 )
 
 type ChangeStatus string
-type ChangeTargetStatus string
 
 const (
 	ChangeStatusPending ChangeStatus = "PENDING"
-	ChangeStatusInSync  ChangeStatus = "INSYNC"
+	ChangeStatusDone    ChangeStatus = "DONE"
 )
 
 type ZoneChangeAction string
 type RRSetChangeAction string
+
+type ResponsePolicyChangeAction string
+type ResponsePolicyRuleChangeAction string
 
 const (
 	ZoneChangeActionCreate ZoneChangeAction = "CREATE"
 	ZoneChangeActionDelete ZoneChangeAction = "DELETE"
 	ZoneChangeActionUpdate ZoneChangeAction = "UPDATE"
 
-	RRSetChangeActionCreate RRSetChangeAction = "CREATE"
 	RRSetChangeActionUpsert RRSetChangeAction = "UPSERT"
 	RRSetChangeActionDelete RRSetChangeAction = "DELETE"
+
+	ResponsePolicyChangeActionUpsert ResponsePolicyChangeAction = "UPSERT"
+	ResponsePolicyChangeActionDelete ResponsePolicyChangeAction = "DELETE"
+
+	ResponsePolicyRuleChangeActionUpsert ResponsePolicyRuleChangeAction = "UPSERT"
+	ResponsePolicyRuleChangeActionDelete ResponsePolicyRuleChangeAction = "DELETE"
 )
 
 type Change struct {
-	ID         uuid.UUID    `json:"id"`
-	Type       ChangeType   `json:"type"`
-	ZoneChange *ZoneChange  `json:"zoneChange,omitempty"`
-	Status     ChangeStatus `json:"status"`
+	ID                   uuid.UUID             `json:"id"`
+	Type                 ChangeType            `json:"type"`
+	ZoneChange           *ZoneChange           `json:"zoneChange,omitempty"`
+	ResponsePolicyChange *ResponsePolicyChange `json:"responsePolicyChange,omitempty"`
+	Status               ChangeStatus          `json:"status"`
 
 	SubmittedAt *time.Time `json:"submittedAt,omitempty"`
 }
@@ -57,10 +66,9 @@ func NewChangeWithZoneChange(zoneChange ZoneChange, status ChangeStatus) Change 
 }
 
 type ZoneChange struct {
-	ZoneName    string                    `json:"zoneName"`
-	Action      ZoneChangeAction          `json:"action"`
-	Changes     []ResourceRecordSetChange `json:"changes"`
-	SubmittedAt *time.Time                `json:"submittedAt,omitempty"`
+	ZoneName string                    `json:"zoneName"`
+	Action   ZoneChangeAction          `json:"action"`
+	Changes  []ResourceRecordSetChange `json:"changes"`
 }
 
 func NewZoneChange(zoneName string, action ZoneChangeAction, changes []ResourceRecordSetChange) ZoneChange {
@@ -81,4 +89,10 @@ func NewResourceRecordSetChange(action RRSetChangeAction, resourceRecordSet Reso
 		Action:            action,
 		ResourceRecordSet: resourceRecordSet,
 	}
+}
+
+type ResponsePolicyChange struct {
+	ResponsePolicyID uuid.UUID                  `json:"responsePolicyID"`
+	Action           ResponsePolicyChangeAction `json:"action"`
+	Changes          []ResourceRecordSetChange  `json:"changes"`
 }

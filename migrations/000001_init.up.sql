@@ -27,7 +27,7 @@ CREATE TABLE
         id UUID PRIMARY KEY,
         type TEXT NOT NULL CHECK (type IN ('ZONE')),
         data JSONB NOT NULL,
-        status TEXT NOT NULL CHECK (status IN ('PENDING', 'INSYNC')),
+        status TEXT NOT NULL CHECK (status IN ('PENDING', 'DONE')),
         submitted_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
         lock_expires TIMESTAMPTZ
     );

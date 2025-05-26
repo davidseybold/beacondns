@@ -3,8 +3,6 @@ package beacon
 import (
 	"context"
 	"fmt"
-	"log/slog"
-	"os"
 
 	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/core/dnsserver"
@@ -12,12 +10,10 @@ import (
 
 	"github.com/davidseybold/beacondns/internal/db/kvstore"
 	"github.com/davidseybold/beacondns/internal/dnsstore"
-	"github.com/davidseybold/beacondns/internal/logger"
 )
 
 //nolint:gochecknoinits // used for plugin registration
 func init() {
-	log.Info("registering beacon plugin")
 	plugin.Register("beacon", setup)
 }
 
@@ -39,8 +35,7 @@ func setup(c *caddy.Controller) error {
 }
 
 func (b *Beacon) OnStartup() error {
-	log.Info("starting beacon")
-	b.logger.Info("starting beacon")
+	blog.Info("starting beacon")
 
 	etcdClient, err := kvstore.NewEtcdClient(b.config.EtcdEndpoints, kvstore.Scope{
 		Namespace: "beacon",
@@ -80,7 +75,7 @@ func (b *Beacon) OnStartup() error {
 }
 
 func (b *Beacon) OnFinalShutdown() error {
-	b.logger.Info("shutting down beacon")
+	blog.Info("shutting down beacon")
 	return b.close()
 }
 
@@ -96,7 +91,6 @@ func beaconParse(c *caddy.Controller) (*Beacon, error) {
 func parseAttributes(c *caddy.Controller) (*Beacon, error) {
 	beacon := &Beacon{
 		zoneTrie: NewZoneTrie(),
-		logger:   logger.NewJSONLogger(slog.LevelInfo, os.Stdout),
 	}
 
 	config := Config{}

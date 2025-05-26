@@ -18,7 +18,6 @@ var rules = []rule{
 	cnameRule,
 	soaRule,
 	nsRule,
-	duplicateRecordRule,
 	apexRecordRule,
 	ttlRule,
 	recordValueRule,
@@ -116,36 +115,13 @@ func nsRule(zone *model.Zone, changes []model.ResourceRecordSetChange) error {
 	if !hasNS {
 		addingNS := false
 		for _, change := range changes {
-			if change.ResourceRecordSet.Type == model.RRTypeNS && change.Action == model.RRSetChangeActionCreate {
+			if change.ResourceRecordSet.Type == model.RRTypeNS && change.Action == model.RRSetChangeActionUpsert {
 				addingNS = true
 				break
 			}
 		}
 		if !addingNS {
 			return fmt.Errorf("zone %s must have at least one NS record", zone.Name)
-		}
-	}
-
-	return nil
-}
-
-func duplicateRecordRule(zone *model.Zone, changes []model.ResourceRecordSetChange) error {
-	existingRecords := make(map[string]map[model.RRType]struct{})
-	for _, rrset := range zone.ResourceRecordSets {
-		if _, ok := existingRecords[rrset.Name]; !ok {
-			existingRecords[rrset.Name] = make(map[model.RRType]struct{})
-		}
-		existingRecords[rrset.Name][rrset.Type] = struct{}{}
-	}
-
-	for _, change := range changes {
-		if change.Action == model.RRSetChangeActionCreate {
-			if types, ok := existingRecords[change.ResourceRecordSet.Name]; ok {
-				if _, exists := types[change.ResourceRecordSet.Type]; exists {
-					return fmt.Errorf("duplicate record: %s record already exists at %s",
-						change.ResourceRecordSet.Type, change.ResourceRecordSet.Name)
-				}
-			}
 		}
 	}
 

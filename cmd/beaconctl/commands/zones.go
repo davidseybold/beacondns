@@ -30,16 +30,14 @@ var createZoneCmd = &cobra.Command{
 		name := args[0]
 
 		c := client.New(config.Host)
-		response, err := c.CreateZone(context.Background(), name)
+		zone, err := c.CreateZone(context.Background(), name)
 		if err != nil {
 			return err
 		}
 
 		table := tablewriter.NewWriter(os.Stdout)
 		table.Header([]string{"ID", "NAME", "RECORD COUNT"})
-		_ = table.Append(
-			[]string{response.Zone.ID, response.Zone.Name, strconv.Itoa(response.Zone.ResourceRecordSetCount)},
-		)
+		_ = table.Append([]string{zone.ID, zone.Name, strconv.Itoa(zone.ResourceRecordSetCount)})
 		return table.Render()
 	},
 }
@@ -54,19 +52,19 @@ var listZonesCmd = &cobra.Command{
 		}
 
 		c := client.New(config.Host)
-		response, err := c.ListZones(context.Background())
+		zones, err := c.ListZones(context.Background())
 		if err != nil {
 			return err
 		}
 
-		if len(response.Zones) == 0 {
+		if len(zones) == 0 {
 			cmd.Println("No zones found")
 			return nil
 		}
 
 		table := tablewriter.NewWriter(os.Stdout)
 		table.Header([]string{"ID", "NAME", "RECORD COUNT"})
-		for _, zone := range response.Zones {
+		for _, zone := range zones {
 			_ = table.Append([]string{zone.ID, zone.Name, strconv.Itoa(zone.ResourceRecordSetCount)})
 		}
 		return table.Render()
@@ -115,15 +113,13 @@ var deleteZoneCmd = &cobra.Command{
 		}
 
 		c := client.New(config.Host)
-		response, err := c.DeleteZone(context.Background(), zoneID)
+		err = c.DeleteZone(context.Background(), zoneID)
 		if err != nil {
 			return err
 		}
 
-		table := tablewriter.NewWriter(os.Stdout)
-		table.Header([]string{"ZONE ID", "CHANGE ID"})
-		_ = table.Append([]string{zoneID, response.ID})
-		return table.Render()
+		cmd.Println("Zone deleted")
+		return nil
 	},
 }
 

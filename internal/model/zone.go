@@ -58,15 +58,14 @@ type Zone struct {
 	ResourceRecordSets []ResourceRecordSet `json:"resourceRecordSets"`
 }
 
-func NewZone(name string) Zone {
-	return Zone{
+func NewZone(name string) *Zone {
+	return &Zone{
 		ID:   uuid.New(),
 		Name: name,
 	}
 }
 
 type ResourceRecordSet struct {
-	ID              uuid.UUID        `json:"id,omitempty"`
 	Name            string           `json:"name"`
 	Type            RRType           `json:"type"`
 	TTL             uint32           `json:"ttl"`
@@ -89,7 +88,6 @@ func NewSOA(
 	soaMinimum uint,
 ) ResourceRecordSet {
 	return ResourceRecordSet{
-		ID:   uuid.New(),
 		Name: zoneName,
 		Type: RRTypeSOA,
 		TTL:  ttl,
@@ -119,7 +117,6 @@ func NewNS(zoneName string, ttl uint32, nameServerNames []string) ResourceRecord
 	}
 
 	return ResourceRecordSet{
-		ID:              uuid.New(),
 		Name:            zoneName,
 		Type:            RRTypeNS,
 		TTL:             ttl,

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 
 	"github.com/coredns/coredns/plugin"
 	clog "github.com/coredns/coredns/plugin/pkg/log"
@@ -15,7 +14,7 @@ import (
 )
 
 //nolint:gochecknoglobals // used for logging
-var log = clog.NewWithPlugin("beacon")
+var blog = clog.NewWithPlugin("beacon")
 
 type Config struct {
 	EtcdEndpoints []string
@@ -29,7 +28,6 @@ type Beacon struct {
 	store    dnsstore.DNSStore
 	zoneTrie *ZoneTrie
 	close    func() error
-	logger   *slog.Logger
 }
 
 var _ plugin.Handler = (*Beacon)(nil)
@@ -41,7 +39,7 @@ func (b *Beacon) lookup(zoneName, rrName string, t dns.Type) ([]dns.RR, bool) {
 	if err != nil && errors.Is(err, dnsstore.ErrNotFound) {
 		return nil, false
 	} else if err != nil {
-		log.Errorf("error looking up rrset %s for zone %s: %s", rrName, zoneName, err.Error())
+		blog.Errorf("error looking up rrset %s for zone %s: %s", rrName, zoneName, err.Error())
 		return nil, false
 	}
 

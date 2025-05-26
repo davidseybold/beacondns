@@ -28,62 +28,71 @@ func New(host string) *Client {
 	}
 }
 
-func (c *Client) CreateZone(ctx context.Context, name string) (*CreateZoneResponse, error) {
-	req := CreateZoneRequest{Name: name}
-	var resp CreateZoneResponse
+func (c *Client) CreateZone(ctx context.Context, name string) (*Zone, error) {
+	req := createZoneRequest{Name: name}
+	var resp Zone
 	if err := c.postRequest(ctx, "/v1/zones", req, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
 }
 
-func (c *Client) ListZones(ctx context.Context) (*ListZonesResponse, error) {
-	var resp ListZonesResponse
+func (c *Client) ListZones(ctx context.Context) ([]Zone, error) {
+	var resp listZonesResponse
 	if err := c.getRequest(ctx, "/v1/zones", &resp); err != nil {
 		return nil, err
 	}
-	return &resp, nil
+	return resp.Zones, nil
 }
 
-func (c *Client) GetZone(ctx context.Context, id string) (*Zone, error) {
+func (c *Client) GetZone(ctx context.Context, name string) (*Zone, error) {
 	var resp Zone
-	if err := c.getRequest(ctx, fmt.Sprintf("/v1/zones/%s", id), &resp); err != nil {
+	if err := c.getRequest(ctx, fmt.Sprintf("/v1/zones/%s", name), &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
 }
 
-func (c *Client) DeleteZone(ctx context.Context, id string) (*ChangeInfo, error) {
-	var resp ChangeInfo
-	if err := c.deleteRequest(ctx, fmt.Sprintf("/v1/zones/%s", id), &resp); err != nil {
+func (c *Client) DeleteZone(ctx context.Context, name string) error {
+	return c.deleteRequest(ctx, fmt.Sprintf("/v1/zones/%s", name), nil)
+}
+
+func (c *Client) ListResourceRecordSets(ctx context.Context, zoneName string) ([]ResourceRecordSet, error) {
+	var resp listResourceRecordSetsResponse
+	if err := c.getRequest(ctx, fmt.Sprintf("/v1/zones/%s/rrsets", zoneName), &resp); err != nil {
+		return nil, err
+	}
+	return resp.ResourceRecordSets, nil
+}
+
+func (c *Client) UpsertResourceRecordSet(
+	ctx context.Context,
+	zoneName string,
+	rrSet ResourceRecordSet,
+) (*ResourceRecordSet, error) {
+	req := upsertResourceRecordSetRequest{ResourceRecordSet: rrSet}
+	var resp ResourceRecordSet
+	if err := c.postRequest(ctx, fmt.Sprintf("/v1/zones/%s/rrsets", zoneName), req, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
 }
 
-func (c *Client) ListResourceRecordSets(ctx context.Context, zoneID string) (*ListResourceRecordSetsResponse, error) {
-	var resp ListResourceRecordSetsResponse
-	if err := c.getRequest(ctx, fmt.Sprintf("/v1/zones/%s/rrsets", zoneID), &resp); err != nil {
+func (c *Client) GetResourceRecordSet(
+	ctx context.Context,
+	zoneName string,
+	name string,
+	rrType string,
+) (*ResourceRecordSet, error) {
+	var resp ResourceRecordSet
+	if err := c.getRequest(ctx, fmt.Sprintf("/v1/zones/%s/rrsets/%s/%s", zoneName, name, rrType), &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
 }
 
-func (c *Client) ChangeResourceRecordSets(ctx context.Context, zoneID string, changes []Change) (*ChangeInfo, error) {
-	req := ChangeResourceRecordSetsRequest{Changes: changes}
-	var resp ChangeInfo
-	if err := c.postRequest(ctx, fmt.Sprintf("/v1/zones/%s/rrsets", zoneID), req, &resp); err != nil {
-		return nil, err
-	}
-	return &resp, nil
-}
-
-func (c *Client) GetChange(ctx context.Context, changeID string) (*ChangeInfo, error) {
-	var resp ChangeInfo
-	if err := c.getRequest(ctx, fmt.Sprintf("/v1/changes/%s", changeID), &resp); err != nil {
-		return nil, err
-	}
-	return &resp, nil
+func (c *Client) DeleteResourceRecordSet(ctx context.Context, zoneID string, name string, rrType string) error {
+	return c.deleteRequest(ctx, fmt.Sprintf("/v1/zones/%s/rrsets/%s/%s", zoneID, name, rrType), nil)
 }
 
 func (c *Client) getRequest(ctx context.Context, path string, result any) error {
@@ -118,8 +127,7 @@ func (c *Client) doRequest(ctx context.Context, method, path string, bodyReader 
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= http.StatusBadRequest {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("API request failed with status %d: %s", resp.StatusCode, string(body))
+		return c.handleError(resp)
 	}
 
 	if result != nil {
@@ -129,4 +137,13 @@ func (c *Client) doRequest(ctx context.Context, method, path string, bodyReader 
 	}
 
 	return nil
+}
+
+func (c *Client) handleError(resp *http.Response) error {
+	body, _ := io.ReadAll(resp.Body)
+	var errResponse errorResponse
+	if err := json.Unmarshal(body, &errResponse); err != nil {
+		return fmt.Errorf("failed to unmarshal error response: %w", err)
+	}
+	return parseError(errResponse)
 }

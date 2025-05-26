@@ -25,7 +25,7 @@ type ResponsePolicy struct {
 	ID          uuid.UUID `json:"id"`
 	Name        string    `json:"name"`
 	Description string    `json:"description"`
-	Priority    int       `json:"priority"`
+	Priority    uint      `json:"priority"`
 	Enabled     bool      `json:"enabled"`
 }
 

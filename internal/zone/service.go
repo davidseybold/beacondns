@@ -2,10 +2,7 @@ package zone
 
 import (
 	"context"
-	"errors"
-	"fmt"
 
-	"github.com/google/uuid"
 	"github.com/miekg/dns"
 
 	"github.com/davidseybold/beacondns/internal/model"
@@ -28,21 +25,25 @@ const (
 
 type Service interface {
 	// Zone management
-	CreateZone(ctx context.Context, name string) (*CreateZoneResult, error)
-	DeleteZone(ctx context.Context, id uuid.UUID) (*model.Change, error)
-	GetZoneInfo(ctx context.Context, id uuid.UUID) (*model.ZoneInfo, error)
+	CreateZone(ctx context.Context, name string) (*model.ZoneInfo, error)
+	DeleteZone(ctx context.Context, name string) error
+	GetZoneInfo(ctx context.Context, name string) (*model.ZoneInfo, error)
 	ListZones(ctx context.Context) ([]model.ZoneInfo, error)
 
 	// Resource record management
-	ListResourceRecordSets(ctx context.Context, zoneID uuid.UUID) ([]model.ResourceRecordSet, error)
-	ChangeResourceRecordSets(
+	ListResourceRecordSets(ctx context.Context, zoneName string) ([]model.ResourceRecordSet, error)
+	GetResourceRecordSet(
 		ctx context.Context,
-		zoneID uuid.UUID,
-		rrc []model.ResourceRecordSetChange,
-	) (*model.Change, error)
-
-	// Change management
-	GetChange(ctx context.Context, id uuid.UUID) (*model.Change, error)
+		zoneName string,
+		name string,
+		rrType model.RRType,
+	) (*model.ResourceRecordSet, error)
+	UpsertResourceRecordSet(
+		ctx context.Context,
+		zoneName string,
+		rrSet *model.ResourceRecordSet,
+	) (*model.ResourceRecordSet, error)
+	DeleteResourceRecordSet(ctx context.Context, zoneName string, name string, rrType model.RRType) error
 }
 
 type DefaultService struct {
@@ -57,14 +58,7 @@ func NewService(r repository.TransactorRegistry) *DefaultService {
 	}
 }
 
-type CreateZoneResult struct {
-	Zone   *model.Zone
-	Change *model.Change
-}
-
-func (d *DefaultService) CreateZone(ctx context.Context, name string) (*CreateZoneResult, error) {
-	var err error
-
+func (d *DefaultService) CreateZone(ctx context.Context, name string) (*model.ZoneInfo, error) {
 	zoneName := dns.Fqdn(name)
 
 	zone := model.NewZone(zoneName)
@@ -92,48 +86,40 @@ func (d *DefaultService) CreateZone(ctx context.Context, name string) (*CreateZo
 		zoneName,
 		model.ZoneChangeActionCreate,
 		[]model.ResourceRecordSetChange{
-			model.NewResourceRecordSetChange(model.RRSetChangeActionCreate, soaRecord),
-			model.NewResourceRecordSetChange(model.RRSetChangeActionCreate, nsRecord),
+			model.NewResourceRecordSetChange(model.RRSetChangeActionUpsert, soaRecord),
+			model.NewResourceRecordSetChange(model.RRSetChangeActionUpsert, nsRecord),
 		},
 	)
 
 	change := model.NewChangeWithZoneChange(zoneChange, model.ChangeStatusPending)
 
-	rawResult, err := d.registry.InTx(ctx, func(ctx context.Context, r repository.Registry) (any, error) {
+	var zoneInfo *model.ZoneInfo
+	err := d.registry.InTx(ctx, func(ctx context.Context, r repository.Registry) error {
 		var createZoneErr error
-		createZoneErr = r.GetZoneRepository().CreateZone(ctx, &zone)
+		zoneInfo, createZoneErr = r.GetZoneRepository().CreateZone(ctx, zone)
 		if createZoneErr != nil {
-			return nil, createZoneErr
+			return createZoneErr
 		}
 
-		change, createZoneErr := r.GetChangeRepository().CreateChange(ctx, change)
+		_, createZoneErr = r.GetChangeRepository().CreateChange(ctx, change)
 		if createZoneErr != nil {
-			return nil, createZoneErr
+			return createZoneErr
 		}
 
-		return change, nil
+		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create zone: %w", err)
+		return nil, err
 	}
 
-	chResult, ok := rawResult.(*model.Change)
-	if !ok {
-		return nil, fmt.Errorf("unexpected result type: %T", rawResult)
-	}
-
-	return &CreateZoneResult{
-		Zone:   &zone,
-		Change: chResult,
-	}, nil
+	return zoneInfo, nil
 }
 
-func (d *DefaultService) GetZoneInfo(ctx context.Context, id uuid.UUID) (*model.ZoneInfo, error) {
-	z, err := d.registry.GetZoneRepository().GetZoneInfo(ctx, id)
-	if err != nil && errors.Is(err, repository.ErrNotFound) {
-		return nil, model.ErrZoneNotFound
-	} else if err != nil {
-		return nil, fmt.Errorf("failed to get zone %s: %w", id, err)
+func (d *DefaultService) GetZoneInfo(ctx context.Context, name string) (*model.ZoneInfo, error) {
+	zoneName := dns.Fqdn(name)
+	z, err := d.registry.GetZoneRepository().GetZoneInfo(ctx, zoneName)
+	if err != nil {
+		return nil, err
 	}
 
 	return z, nil
@@ -143,25 +129,27 @@ func (d *DefaultService) ListZones(ctx context.Context) ([]model.ZoneInfo, error
 	return d.registry.GetZoneRepository().ListZoneInfos(ctx)
 }
 
-func (d *DefaultService) ChangeResourceRecordSets(
+func (d *DefaultService) UpsertResourceRecordSet(
 	ctx context.Context,
-	zoneID uuid.UUID,
-	rrc []model.ResourceRecordSetChange,
-) (*model.Change, error) {
-	zone, err := d.registry.GetZoneRepository().GetZone(ctx, zoneID)
+	zoneName string,
+	rrSet *model.ResourceRecordSet,
+) (*model.ResourceRecordSet, error) {
+	zoneName = dns.Fqdn(zoneName)
+	zone, err := d.registry.GetZoneRepository().GetZone(ctx, zoneName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get zone %s: %w", zoneID, err)
+		return nil, err
 	}
 
-	err = validateChanges(zone, rrc)
-	if err != nil {
-		return nil, fmt.Errorf("failed to validate changes: %w", err)
+	rrSet.Name = dns.Fqdn(rrSet.Name)
+
+	rrcs := []model.ResourceRecordSetChange{
+		model.NewResourceRecordSetChange(model.RRSetChangeActionUpsert, *rrSet),
 	}
 
 	zoneChange := model.NewZoneChange(
 		zone.Name,
 		model.ZoneChangeActionUpdate,
-		rrc,
+		rrcs,
 	)
 
 	change := model.NewChangeWithZoneChange(
@@ -169,90 +157,82 @@ func (d *DefaultService) ChangeResourceRecordSets(
 		model.ChangeStatusPending,
 	)
 
-	rawResult, err := d.registry.InTx(ctx, func(ctx context.Context, r repository.Registry) (any, error) {
-		for _, ch := range rrc {
-			switch ch.Action {
-			case model.RRSetChangeActionCreate:
-				ch.ResourceRecordSet.ID = uuid.New()
-				err = r.GetZoneRepository().InsertResourceRecordSet(ctx, zoneID, &ch.ResourceRecordSet)
-			case model.RRSetChangeActionUpsert:
-				ch.ResourceRecordSet.ID = uuid.New()
-				err = r.GetZoneRepository().UpsertResourceRecordSet(ctx, zoneID, &ch.ResourceRecordSet)
-			case model.RRSetChangeActionDelete:
-				err = r.GetZoneRepository().DeleteResourceRecordSet(ctx, zoneID, &ch.ResourceRecordSet)
-			}
+	err = validateChanges(zone, rrcs)
+	if err != nil {
+		return nil, err
+	}
 
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		var newChange *model.Change
-		newChange, err = r.GetChangeRepository().CreateChange(ctx, change)
+	var newRRSet *model.ResourceRecordSet
+	err = d.registry.InTx(ctx, func(ctx context.Context, r repository.Registry) error {
+		newRRSet, err = r.GetZoneRepository().UpsertResourceRecordSet(ctx, zoneName, rrSet)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		return newChange, nil
+		_, err = r.GetChangeRepository().CreateChange(ctx, change)
+		if err != nil {
+			return err
+		}
+
+		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to change resource record sets: %w", err)
+		return nil, err
 	}
 
-	chResult, ok := rawResult.(*model.Change)
-	if !ok {
-		return nil, fmt.Errorf("unexpected result type: %T", rawResult)
-	}
+	return newRRSet, nil
+}
 
-	return chResult, nil
+func (d *DefaultService) GetResourceRecordSet(
+	ctx context.Context,
+	zoneName string,
+	name string,
+	rrType model.RRType,
+) (*model.ResourceRecordSet, error) {
+	zoneName = dns.Fqdn(zoneName)
+	return d.registry.GetZoneRepository().GetResourceRecordSet(ctx, zoneName, name, rrType)
+}
+
+func (d *DefaultService) DeleteResourceRecordSet(
+	ctx context.Context,
+	zoneName string,
+	name string,
+	rrType model.RRType,
+) error {
+	zoneName = dns.Fqdn(zoneName)
+	return d.registry.GetZoneRepository().DeleteResourceRecordSet(ctx, zoneName, name, rrType)
 }
 
 func (d *DefaultService) ListResourceRecordSets(
 	ctx context.Context,
-	zoneID uuid.UUID,
+	zoneName string,
 ) ([]model.ResourceRecordSet, error) {
-	return d.registry.GetZoneRepository().GetZoneResourceRecordSets(ctx, zoneID)
+	zoneName = dns.Fqdn(zoneName)
+	return d.registry.GetZoneRepository().GetZoneResourceRecordSets(ctx, zoneName)
 }
 
-func (d *DefaultService) DeleteZone(ctx context.Context, id uuid.UUID) (*model.Change, error) {
-	zone, err := d.registry.GetZoneRepository().GetZone(ctx, id)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get zone %s: %w", id, err)
-	}
+func (d *DefaultService) DeleteZone(ctx context.Context, name string) error {
+	zoneName := dns.Fqdn(name)
 
-	zoneChange := model.NewZoneChange(zone.Name, model.ZoneChangeActionDelete, []model.ResourceRecordSetChange{})
+	zoneChange := model.NewZoneChange(zoneName, model.ZoneChangeActionDelete, []model.ResourceRecordSetChange{})
 	change := model.NewChangeWithZoneChange(zoneChange, model.ChangeStatusPending)
 
-	rawResult, err := d.registry.InTx(ctx, func(ctx context.Context, r repository.Registry) (any, error) {
-		err = r.GetZoneRepository().DeleteZone(ctx, id)
+	err := d.registry.InTx(ctx, func(ctx context.Context, r repository.Registry) error {
+		err := r.GetZoneRepository().DeleteZone(ctx, zoneName)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		newChange, createErr := r.GetChangeRepository().CreateChange(ctx, change)
-		if createErr != nil {
-			return nil, err
+		_, err = r.GetChangeRepository().CreateChange(ctx, change)
+		if err != nil {
+			return err
 		}
 
-		return newChange, nil
+		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to delete zone: %w", err)
+		return err
 	}
 
-	chResult, ok := rawResult.(*model.Change)
-	if !ok {
-		return nil, fmt.Errorf("unexpected result type: %T", rawResult)
-	}
-
-	return chResult, nil
-}
-
-func (d *DefaultService) GetChange(ctx context.Context, id uuid.UUID) (*model.Change, error) {
-	ch, err := d.registry.GetChangeRepository().GetChange(ctx, id)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get change %s: %w", id, err)
-	}
-
-	return ch, nil
+	return nil
 }

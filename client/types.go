@@ -1,11 +1,7 @@
 package client
 
-type CreateZoneRequest struct {
+type createZoneRequest struct {
 	Name string `json:"name"`
-}
-
-type ChangeResourceRecordSetsRequest struct {
-	Changes []Change `json:"changes"`
 }
 
 type Zone struct {
@@ -25,31 +21,19 @@ type ResourceRecord struct {
 	Value string `json:"value"`
 }
 
-type Change struct {
-	Action            string            `json:"action"`
-	ResourceRecordSet ResourceRecordSet `json:"resourceRecordSet"`
-}
-
-type ChangeInfo struct {
-	ID          string `json:"id"`
-	Status      string `json:"status"`
-	SubmittedAt string `json:"submittedAt"`
-}
-
-type CreateZoneResponse struct {
-	ChangeInfo ChangeInfo `json:"changeInfo"`
-	Zone       Zone       `json:"zone"`
-}
-
-type ListZonesResponse struct {
+type listZonesResponse struct {
 	Zones []Zone `json:"zones"`
 }
 
-type ListResourceRecordSetsResponse struct {
+type listResourceRecordSetsResponse struct {
 	ResourceRecordSets []ResourceRecordSet `json:"resourceRecordSets"`
 }
 
-type ErrorResponse struct {
+type errorResponse struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
+}
+
+type upsertResourceRecordSetRequest struct {
+	ResourceRecordSet
 }

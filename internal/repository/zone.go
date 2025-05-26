@@ -3,18 +3,19 @@ package repository
 import (
 	"context"
 	"database/sql"
-	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/pkg/errors"
 
+	"github.com/davidseybold/beacondns/internal/beaconerr"
 	"github.com/davidseybold/beacondns/internal/db/postgres"
 	"github.com/davidseybold/beacondns/internal/model"
 )
 
 const (
 	insertZoneQuery              = "INSERT INTO zones(id, name) VALUES ($1, $2);"
-	deleteZoneQuery              = "DELETE FROM zones WHERE id = $1;"
+	deleteZoneQuery              = "DELETE FROM zones WHERE name = $1;"
 	insertResourceRecordSetQuery = "INSERT INTO resource_record_sets (id, zone_id, name, record_type, ttl) VALUES ($1, $2, $3, $4, $5) RETURNING id;"
 	insertResourceRecordQuery    = "INSERT INTO resource_records (resource_record_set_id, value) VALUES ($1, $2);"
 
@@ -22,13 +23,13 @@ const (
 	SELECT z.id, z.name, 
 	       (SELECT COUNT(*) FROM resource_record_sets rrs WHERE rrs.zone_id = z.id) as record_count
 	FROM zones z
-	WHERE z.id = $1
+	WHERE z.name = $1
 	`
 
 	selectZoneQuery = `
 	SELECT z.id, z.name
 	FROM zones z
-	WHERE z.id = $1
+	WHERE z.name = $1
 	`
 
 	selectZoneInfosQuery = `
@@ -40,15 +41,24 @@ const (
 	`
 
 	upsertResourceRecordSetQuery = `
+	WITH zone_lookup AS (
+		SELECT id FROM zones WHERE name = $2
+	)
 	INSERT INTO resource_record_sets (id, zone_id, name, record_type, ttl)
-	VALUES ($1, $2, $3, $4, $5)
+	SELECT $1, zone_lookup.id, $3, $4, $5
+	FROM zone_lookup
 	ON CONFLICT (zone_id, name, record_type)
 	DO UPDATE SET ttl = $5
 	RETURNING id;
 	`
 
 	deleteResourceRecordSetQuery = `
-	DELETE FROM resource_record_sets WHERE zone_id = $1 AND name = $2 AND record_type = $3;
+	DELETE FROM resource_record_sets rrs
+	USING zones z
+	WHERE rrs.zone_id = z.id
+		AND z.name = $1
+		AND rrs.name = $2
+		AND rrs.record_type = $3;
 	`
 
 	deleteResourceRecordForSetQuery = `
@@ -58,7 +68,8 @@ const (
 	selectResourceRecordSetQuery = `
 	SELECT rrs.id, rrs.name, rrs.record_type, rrs.ttl
 	FROM resource_record_sets rrs
-	WHERE rrs.id = $1
+	INNER JOIN zones z ON z.id = rrs.zone_id
+	WHERE z.name = $1 AND rrs.name = $2 AND rrs.record_type = $3
 	`
 
 	selectResourceRecordsQuery = `
@@ -69,31 +80,41 @@ const (
 	`
 
 	selectResourceRecordSetsByNameQuery = `
-	SELECT rrs.id, rrs.name, rrs.record_type, rrs.ttl
+	SELECT rrs.name, rrs.record_type, rrs.ttl
 	FROM resource_record_sets rrs
-	WHERE rrs.zone_id = $1 AND rrs.name = $2
+	INNER JOIN zones z ON z.id = rrs.zone_id
+	WHERE z.name = $1 AND rrs.name = $2
 	ORDER BY rrs.record_type
 	`
 
 	selectResourceRecordSetsForZoneQuery = `
 	SELECT rrs.id, rrs.name, rrs.record_type, rrs.ttl
 	FROM resource_record_sets rrs
-	WHERE rrs.zone_id = $1
+	INNER JOIN zones z ON z.id = rrs.zone_id
+	WHERE z.name = $1
 	ORDER BY rrs.name, rrs.record_type
 	`
 )
 
 type ZoneRepository interface {
-	CreateZone(ctx context.Context, zone *model.Zone) error
-	DeleteZone(ctx context.Context, id uuid.UUID) error
-	GetZone(ctx context.Context, id uuid.UUID) (*model.Zone, error)
-	GetZoneInfo(ctx context.Context, id uuid.UUID) (*model.ZoneInfo, error)
+	CreateZone(ctx context.Context, zone *model.Zone) (*model.ZoneInfo, error)
+	DeleteZone(ctx context.Context, name string) error
+	GetZone(ctx context.Context, name string) (*model.Zone, error)
+	GetZoneInfo(ctx context.Context, name string) (*model.ZoneInfo, error)
 	ListZoneInfos(ctx context.Context) ([]model.ZoneInfo, error)
-	GetResourceRecordSet(ctx context.Context, id uuid.UUID) (*model.ResourceRecordSet, error)
-	GetZoneResourceRecordSets(ctx context.Context, zoneID uuid.UUID) ([]model.ResourceRecordSet, error)
-	InsertResourceRecordSet(ctx context.Context, zoneID uuid.UUID, recordSet *model.ResourceRecordSet) error
-	UpsertResourceRecordSet(ctx context.Context, zoneID uuid.UUID, recordSet *model.ResourceRecordSet) error
-	DeleteResourceRecordSet(ctx context.Context, zoneID uuid.UUID, recordSet *model.ResourceRecordSet) error
+	GetResourceRecordSet(
+		ctx context.Context,
+		zoneName string,
+		name string,
+		rrType model.RRType,
+	) (*model.ResourceRecordSet, error)
+	GetZoneResourceRecordSets(ctx context.Context, zoneName string) ([]model.ResourceRecordSet, error)
+	UpsertResourceRecordSet(
+		ctx context.Context,
+		zoneName string,
+		recordSet *model.ResourceRecordSet,
+	) (*model.ResourceRecordSet, error)
+	DeleteResourceRecordSet(ctx context.Context, zoneName string, name string, rrType model.RRType) error
 }
 
 type PostgresZoneRepository struct {
@@ -102,16 +123,27 @@ type PostgresZoneRepository struct {
 
 var _ ZoneRepository = (*PostgresZoneRepository)(nil)
 
-func (p *PostgresZoneRepository) CreateZone(ctx context.Context, zone *model.Zone) error {
+func (p *PostgresZoneRepository) CreateZone(ctx context.Context, zone *model.Zone) (*model.ZoneInfo, error) {
 	if _, err := p.db.Exec(ctx, insertZoneQuery, zone.ID, zone.Name); err != nil {
-		return fmt.Errorf("failed to create zone %s: %w", zone.Name, err)
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			if pgErr.Code == "23505" {
+				return nil, beaconerr.ErrZoneAlreadyExists("zone already exists")
+			}
+		}
+
+		return nil, beaconerr.ErrInternalError("failed to create zone", err)
 	}
 
 	if err := p.insertResourceRecordSets(ctx, zone.ID, zone.ResourceRecordSets); err != nil {
-		return fmt.Errorf("failed to create initial resource record sets for zone %s: %w", zone.Name, err)
+		return nil, err
 	}
 
-	return nil
+	return &model.ZoneInfo{
+		ID:                     zone.ID,
+		Name:                   zone.Name,
+		ResourceRecordSetCount: len(zone.ResourceRecordSets),
+	}, nil
 }
 
 func (p *PostgresZoneRepository) insertResourceRecordSets(
@@ -120,16 +152,16 @@ func (p *PostgresZoneRepository) insertResourceRecordSets(
 	recordSets []model.ResourceRecordSet,
 ) error {
 	for _, recordSet := range recordSets {
-		err := p.InsertResourceRecordSet(ctx, zoneID, &recordSet)
+		err := p.insertResourceRecordSet(ctx, zoneID, &recordSet)
 		if err != nil {
-			return fmt.Errorf("failed to insert resource record set: %w", err)
+			return err
 		}
 	}
 
 	return nil
 }
 
-func (p *PostgresZoneRepository) InsertResourceRecordSet(
+func (p *PostgresZoneRepository) insertResourceRecordSet(
 	ctx context.Context,
 	zoneID uuid.UUID,
 	recordSet *model.ResourceRecordSet,
@@ -137,7 +169,7 @@ func (p *PostgresZoneRepository) InsertResourceRecordSet(
 	row := p.db.QueryRow(
 		ctx,
 		insertResourceRecordSetQuery,
-		recordSet.ID,
+		uuid.New(),
 		zoneID,
 		recordSet.Name,
 		recordSet.Type,
@@ -147,37 +179,42 @@ func (p *PostgresZoneRepository) InsertResourceRecordSet(
 	var id uuid.UUID
 	err := row.Scan(&id)
 	if err != nil {
-		return fmt.Errorf("failed to insert resource record set: %w", err)
+		return beaconerr.ErrInternalError("failed to insert resource record set", err)
 	}
 
 	for _, rr := range recordSet.ResourceRecords {
 		_, err = p.db.Exec(ctx, insertResourceRecordQuery, id, rr.Value)
 		if err != nil {
-			return fmt.Errorf("failed to insert resource record: %w", err)
+			return beaconerr.ErrInternalError("failed to insert resource record", err)
 		}
 	}
 
 	return nil
 }
 
-func (p *PostgresZoneRepository) DeleteZone(ctx context.Context, id uuid.UUID) error {
-	_, err := p.db.Exec(ctx, deleteZoneQuery, id)
+func (p *PostgresZoneRepository) DeleteZone(ctx context.Context, name string) error {
+	ct, err := p.db.Exec(ctx, deleteZoneQuery, name)
 	if err != nil {
-		return fmt.Errorf("failed to delete zone: %w", err)
+		return beaconerr.ErrInternalError("failed to delete zone", err)
 	}
+
+	if ct.RowsAffected() == 0 {
+		return beaconerr.ErrNoSuchZone("zone not found")
+	}
+
 	return nil
 }
 
 func (p *PostgresZoneRepository) UpsertResourceRecordSet(
 	ctx context.Context,
-	zoneID uuid.UUID,
+	zoneName string,
 	recordSet *model.ResourceRecordSet,
-) error {
+) (*model.ResourceRecordSet, error) {
 	row := p.db.QueryRow(
 		ctx,
 		upsertResourceRecordSetQuery,
-		recordSet.ID,
-		zoneID,
+		uuid.New(),
+		zoneName,
 		recordSet.Name,
 		recordSet.Type,
 		recordSet.TTL,
@@ -186,50 +223,60 @@ func (p *PostgresZoneRepository) UpsertResourceRecordSet(
 	var id uuid.UUID
 	err := row.Scan(&id)
 	if err != nil {
-		return fmt.Errorf("failed to upsert resource record set: %w", err)
+		return nil, beaconerr.ErrInternalError("failed to upsert resource record set", err)
 	}
 
 	_, err = p.db.Exec(ctx, deleteResourceRecordForSetQuery, id)
 	if err != nil {
-		return fmt.Errorf("failed to delete existing resource records: %w", err)
+		return nil, beaconerr.ErrInternalError("failed to delete existing resource records", err)
 	}
 
 	for _, rr := range recordSet.ResourceRecords {
 		_, err = p.db.Exec(ctx, insertResourceRecordQuery, id, rr.Value)
 		if err != nil {
-			return fmt.Errorf("failed to insert resource record: %w", err)
+			return nil, beaconerr.ErrInternalError("failed to insert resource record", err)
 		}
 	}
 
-	return nil
+	return &model.ResourceRecordSet{
+		Name:            recordSet.Name,
+		Type:            recordSet.Type,
+		TTL:             recordSet.TTL,
+		ResourceRecords: recordSet.ResourceRecords,
+	}, nil
 }
 
 func (p *PostgresZoneRepository) DeleteResourceRecordSet(
 	ctx context.Context,
-	zoneID uuid.UUID,
-	recordSet *model.ResourceRecordSet,
+	zoneName string,
+	name string,
+	rrType model.RRType,
 ) error {
-	_, err := p.db.Exec(ctx, deleteResourceRecordSetQuery, zoneID, recordSet.Name, recordSet.Type)
+	ct, err := p.db.Exec(ctx, deleteResourceRecordSetQuery, zoneName, name, rrType)
 	if err != nil {
-		return fmt.Errorf("failed to delete resource record set: %w", err)
+		return beaconerr.ErrInternalError("failed to delete resource record set", err)
+	}
+
+	if ct.RowsAffected() == 0 {
+		return beaconerr.ErrNoSuchResourceRecordSet("resource record set not found")
 	}
 
 	return nil
 }
 
-func (p *PostgresZoneRepository) GetZone(ctx context.Context, id uuid.UUID) (*model.Zone, error) {
-	row := p.db.QueryRow(ctx, selectZoneQuery, id)
+func (p *PostgresZoneRepository) GetZone(ctx context.Context, name string) (*model.Zone, error) {
+	row := p.db.QueryRow(ctx, selectZoneQuery, name)
 	var zone model.Zone
 	err := row.Scan(&zone.ID, &zone.Name)
 	if err != nil && errors.Is(err, sql.ErrNoRows) {
-		return nil, ErrNotFound
+		return nil, beaconerr.ErrNoSuchZone("zone not found")
 	} else if err != nil {
-		return nil, fmt.Errorf("failed to get zone %s: %w", id, err)
+		return nil, beaconerr.ErrInternalError("failed to get zone", err)
 	}
 
-	recordSets, err := p.GetZoneResourceRecordSets(ctx, id)
+	recordSets, err := p.GetZoneResourceRecordSets(ctx, zone.Name)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get resource record sets for zone %s: %w", id, err)
+		return nil, beaconerr.ErrInternalError("failed to get resource record sets for zone", err)
 	}
 	zone.ResourceRecordSets = recordSets
 
@@ -238,46 +285,46 @@ func (p *PostgresZoneRepository) GetZone(ctx context.Context, id uuid.UUID) (*mo
 
 func (p *PostgresZoneRepository) GetZoneResourceRecordSets(
 	ctx context.Context,
-	zoneID uuid.UUID,
+	zoneName string,
 ) ([]model.ResourceRecordSet, error) {
-	rows, err := p.db.Query(ctx, selectResourceRecordSetsForZoneQuery, zoneID)
+	rows, err := p.db.Query(ctx, selectResourceRecordSetsForZoneQuery, zoneName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get resource record sets for zone %s: %w", zoneID, err)
+		return nil, beaconerr.ErrInternalError("failed to get resource record sets for zone", err)
 	}
 	defer rows.Close()
 
 	var recordSets []model.ResourceRecordSet
 	for rows.Next() {
 		var recordSet model.ResourceRecordSet
-		err = rows.Scan(&recordSet.ID, &recordSet.Name, &recordSet.Type, &recordSet.TTL)
+		var rrSetID uuid.UUID
+		err = rows.Scan(&rrSetID, &recordSet.Name, &recordSet.Type, &recordSet.TTL)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return nil, fmt.Errorf("failed to scan resource record set: %w", err)
+			return nil, beaconerr.ErrInternalError("failed to scan resource record set", err)
 		} else if errors.Is(err, sql.ErrNoRows) {
 			continue
 		}
-		recordSets = append(recordSets, recordSet)
-	}
 
-	for i, recordSet := range recordSets {
 		var records []model.ResourceRecord
-		records, err = p.getResourceRecordSetRecords(ctx, recordSet.ID)
+		records, err = p.getResourceRecordSetRecords(ctx, rrSetID)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get resource records for resource record set %s: %w", recordSet.ID, err)
+			return nil, beaconerr.ErrInternalError("failed to get resource records for resource record set", err)
 		}
-		recordSets[i].ResourceRecords = records
+		recordSet.ResourceRecords = records
+
+		recordSets = append(recordSets, recordSet)
 	}
 
 	return recordSets, nil
 }
 
-func (p *PostgresZoneRepository) GetZoneInfo(ctx context.Context, id uuid.UUID) (*model.ZoneInfo, error) {
-	row := p.db.QueryRow(ctx, selectZoneInfoQuery, id)
+func (p *PostgresZoneRepository) GetZoneInfo(ctx context.Context, name string) (*model.ZoneInfo, error) {
+	row := p.db.QueryRow(ctx, selectZoneInfoQuery, name)
 	var zone model.ZoneInfo
 	err := row.Scan(&zone.ID, &zone.Name, &zone.ResourceRecordSetCount)
 	if err != nil && errors.Is(err, sql.ErrNoRows) {
-		return nil, ErrNotFound
+		return nil, beaconerr.ErrNoSuchZone("zone not found")
 	} else if err != nil {
-		return nil, fmt.Errorf("failed to get zone %s: %w", id, err)
+		return nil, beaconerr.ErrInternalError("failed to get zone", err)
 	}
 
 	return &zone, nil
@@ -286,7 +333,7 @@ func (p *PostgresZoneRepository) GetZoneInfo(ctx context.Context, id uuid.UUID) 
 func (p *PostgresZoneRepository) ListZoneInfos(ctx context.Context) ([]model.ZoneInfo, error) {
 	rows, err := p.db.Query(ctx, selectZoneInfosQuery)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list zone infos: %w", err)
+		return nil, beaconerr.ErrInternalError("failed to list zone infos", err)
 	}
 	defer rows.Close()
 
@@ -295,7 +342,7 @@ func (p *PostgresZoneRepository) ListZoneInfos(ctx context.Context) ([]model.Zon
 		var zoneInfo model.ZoneInfo
 		err = rows.Scan(&zoneInfo.ID, &zoneInfo.Name, &zoneInfo.ResourceRecordSetCount)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return nil, fmt.Errorf("failed to scan zone info: %w", err)
+			return nil, beaconerr.ErrInternalError("failed to scan zone info", err)
 		} else if errors.Is(err, sql.ErrNoRows) {
 			continue
 		}
@@ -307,20 +354,23 @@ func (p *PostgresZoneRepository) ListZoneInfos(ctx context.Context) ([]model.Zon
 
 func (p *PostgresZoneRepository) GetResourceRecordSet(
 	ctx context.Context,
-	id uuid.UUID,
+	zoneName string,
+	name string,
+	rrType model.RRType,
 ) (*model.ResourceRecordSet, error) {
-	row := p.db.QueryRow(ctx, selectResourceRecordSetQuery, id)
+	row := p.db.QueryRow(ctx, selectResourceRecordSetQuery, zoneName, name, rrType)
 	var recordSet model.ResourceRecordSet
-	err := row.Scan(&recordSet.ID, &recordSet.Name, &recordSet.Type, &recordSet.TTL)
+	var rrSetID uuid.UUID
+	err := row.Scan(&rrSetID, &recordSet.Name, &recordSet.Type, &recordSet.TTL)
 	if err != nil && errors.Is(err, sql.ErrNoRows) {
-		return nil, ErrNotFound
+		return nil, beaconerr.ErrNoSuchResourceRecordSet("resource record set not found")
 	} else if err != nil {
-		return nil, fmt.Errorf("failed to get resource record set %s: %w", id, err)
+		return nil, beaconerr.ErrInternalError("failed to get resource record set", err)
 	}
 
-	records, err := p.getResourceRecordSetRecords(ctx, id)
+	records, err := p.getResourceRecordSetRecords(ctx, rrSetID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get resource records for resource record set %s: %w", id, err)
+		return nil, err
 	}
 	recordSet.ResourceRecords = records
 
@@ -329,11 +379,11 @@ func (p *PostgresZoneRepository) GetResourceRecordSet(
 
 func (p *PostgresZoneRepository) getResourceRecordSetRecords(
 	ctx context.Context,
-	id uuid.UUID,
+	rrSetID uuid.UUID,
 ) ([]model.ResourceRecord, error) {
-	rows, err := p.db.Query(ctx, selectResourceRecordsQuery, id)
+	rows, err := p.db.Query(ctx, selectResourceRecordsQuery, rrSetID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get resource records for resource record set %s: %w", id, err)
+		return nil, beaconerr.ErrInternalError("failed to get resource records for resource record set", err)
 	}
 	defer rows.Close()
 
@@ -342,7 +392,7 @@ func (p *PostgresZoneRepository) getResourceRecordSetRecords(
 		var rr model.ResourceRecord
 		err = rows.Scan(&rr.Value)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return nil, fmt.Errorf("failed to scan resource record: %w", err)
+			return nil, beaconerr.ErrInternalError("failed to scan resource record", err)
 		}
 		records = append(records, rr)
 	}
@@ -352,21 +402,21 @@ func (p *PostgresZoneRepository) getResourceRecordSetRecords(
 
 func (p *PostgresZoneRepository) GetResourceRecordSetsByName(
 	ctx context.Context,
-	zoneID uuid.UUID,
+	zoneName string,
 	name string,
 ) ([]model.ResourceRecordSet, error) {
-	rows, err := p.db.Query(ctx, selectResourceRecordSetsByNameQuery, zoneID, name)
+	rows, err := p.db.Query(ctx, selectResourceRecordSetsByNameQuery, zoneName, name)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get resource record sets by name %s: %w", name, err)
+		return nil, beaconerr.ErrInternalError("failed to get resource record sets by name", err)
 	}
 	defer rows.Close()
 
 	var recordSets []model.ResourceRecordSet
 	for rows.Next() {
 		var recordSet model.ResourceRecordSet
-		err = rows.Scan(&recordSet.ID, &recordSet.Name, &recordSet.Type, &recordSet.TTL)
+		err = rows.Scan(&recordSet.Name, &recordSet.Type, &recordSet.TTL)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return nil, fmt.Errorf("failed to scan resource record set: %w", err)
+			return nil, beaconerr.ErrInternalError("failed to scan resource record set", err)
 		} else if errors.Is(err, sql.ErrNoRows) {
 			continue
 		}

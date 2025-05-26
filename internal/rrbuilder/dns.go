@@ -95,7 +95,7 @@ func AAAA(rrset model.ResourceRecordSet) ([]dns.RR, error) {
 		r := new(dns.AAAA)
 		r.Hdr = createHeader(rrset.Name, dns.TypeAAAA, rrset.TTL)
 		ip := net.ParseIP(rr.Value)
-		if ip == nil || ip.To16() == nil {
+		if ip == nil || ip.To4() != nil {
 			return nil, valueError(ErrInvalidIPv6Address, rr.Value)
 		}
 		r.AAAA = ip
@@ -773,6 +773,7 @@ func txtValue(value string) ([]string, error) {
 		i := 1
 		for i < len(s) {
 			c := s[i]
+			//nolint:gocritic // this is clearer than a switch statement.
 			if escaped {
 				buf.WriteByte(c)
 				escaped = false

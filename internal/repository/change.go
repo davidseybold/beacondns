@@ -4,11 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"fmt"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/pkg/errors"
 
+	"github.com/davidseybold/beacondns/internal/beaconerr"
 	"github.com/davidseybold/beacondns/internal/db/postgres"
 	"github.com/davidseybold/beacondns/internal/model"
 )
@@ -72,20 +73,27 @@ func (r *PostgresChangeRepository) CreateChange(
 	switch change.Type {
 	case model.ChangeTypeZone:
 		changeData = change.ZoneChange
-	default:
-		return nil, fmt.Errorf("failed to create change: unknown change type: %s", change.Type)
+	case model.ChangeTypeResponsePolicy:
+		changeData = change.ResponsePolicyChange
 	}
 
 	changeDataJSON, err := json.Marshal(changeData)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal change data for change %s: %w", change.ID, err)
+		return nil, beaconerr.ErrInternalError("failed to marshal change data", err)
 	}
 
 	row := r.db.QueryRow(ctx, insertChangeQuery, change.ID, change.Type, changeDataJSON, change.Status)
 
 	err = row.Scan(&change.SubmittedAt)
 	if err != nil {
-		return nil, fmt.Errorf("failed to insert change %s into database: %w", change.ID, err)
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) {
+			if pgErr.Code == "23505" {
+				return nil, beaconerr.ErrZoneAlreadyExists("zone already exists")
+			}
+		}
+
+		return nil, beaconerr.ErrInternalError("failed to insert change into database", err)
 	}
 
 	return &change, nil
@@ -97,8 +105,10 @@ func (r *PostgresChangeRepository) GetChange(ctx context.Context, id uuid.UUID) 
 	var change model.Change
 	var changeData []byte
 	err := row.Scan(&change.ID, &change.Type, &changeData, &change.SubmittedAt)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get change %s from database: %w", id, err)
+	if err != nil && errors.Is(err, sql.ErrNoRows) {
+		return nil, beaconerr.ErrNoSuchChange("change not found")
+	} else if err != nil {
+		return nil, beaconerr.ErrInternalError("failed to get change from database", err)
 	}
 
 	switch change.Type {
@@ -106,11 +116,16 @@ func (r *PostgresChangeRepository) GetChange(ctx context.Context, id uuid.UUID) 
 		var zoneChange model.ZoneChange
 		err = json.Unmarshal(changeData, &zoneChange)
 		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal zone change data for change %s: %w", id, err)
+			return nil, beaconerr.ErrInternalError("failed to unmarshal zone change data", err)
 		}
 		change.ZoneChange = &zoneChange
-	default:
-		return nil, fmt.Errorf("failed to process change %s: unknown change type: %s", id, change.Type)
+	case model.ChangeTypeResponsePolicy:
+		var responsePolicyChange model.ResponsePolicyChange
+		err = json.Unmarshal(changeData, &responsePolicyChange)
+		if err != nil {
+			return nil, beaconerr.ErrInternalError("failed to unmarshal response policy change data", err)
+		}
+		change.ResponsePolicyChange = &responsePolicyChange
 	}
 
 	return &change, nil
@@ -123,7 +138,7 @@ func (r *PostgresChangeRepository) UpdateChangeStatus(
 ) error {
 	_, err := r.db.Exec(ctx, updateChangeStatusQuery, id, status)
 	if err != nil {
-		return fmt.Errorf("failed to update change status for change %s: %w", id, err)
+		return beaconerr.ErrInternalError("failed to update change status", err)
 	}
 	return nil
 }
@@ -135,9 +150,9 @@ func (r *PostgresChangeRepository) GetChangeToProcess(ctx context.Context) (*mod
 	var changeData []byte
 	err := row.Scan(&change.ID, &change.Type, &changeData, &change.SubmittedAt)
 	if err != nil && errors.Is(err, sql.ErrNoRows) {
-		return nil, ErrNotFound
+		return nil, beaconerr.ErrNoSuchChange("change not found")
 	} else if err != nil {
-		return nil, fmt.Errorf("failed to scan change row: %w", err)
+		return nil, beaconerr.ErrInternalError("failed to scan change row", err)
 	}
 
 	switch change.Type {
@@ -145,11 +160,16 @@ func (r *PostgresChangeRepository) GetChangeToProcess(ctx context.Context) (*mod
 		var zoneChange model.ZoneChange
 		err = json.Unmarshal(changeData, &zoneChange)
 		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal zone change data for change %s: %w", change.ID, err)
+			return nil, beaconerr.ErrInternalError("failed to unmarshal zone change data", err)
 		}
 		change.ZoneChange = &zoneChange
-	default:
-		return nil, fmt.Errorf("failed to process change %s: unknown change type: %s", change.ID, change.Type)
+	case model.ChangeTypeResponsePolicy:
+		var responsePolicyChange model.ResponsePolicyChange
+		err = json.Unmarshal(changeData, &responsePolicyChange)
+		if err != nil {
+			return nil, beaconerr.ErrInternalError("failed to unmarshal response policy change data", err)
+		}
+		change.ResponsePolicyChange = &responsePolicyChange
 	}
 
 	return &change, nil

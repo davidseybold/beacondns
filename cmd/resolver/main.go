@@ -16,7 +16,7 @@ import (
 
 type config struct {
 	EtcdEndpoints []string      `env:"BEACON_ETCD_ENDPOINTS" envSeparator:","`
-	ResolverType  resolver.Type `env:"BEACON_RESOLVER_TYPE"`
+	ResolverType  resolver.Type `env:"BEACON_RESOLVER_TYPE"                   envDefault:"forwarder"`
 	Forwarder     string        `env:"BEACON_FORWARDER"`
 }
 

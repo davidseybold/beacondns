@@ -42,6 +42,10 @@ run-resolver: build-resolver
 	@echo ">> Running resolver..."
 	BEACON_ENV=local $(RESOLVER_BIN)
 
+run-e2e-test:
+	@echo ">> Running e2e test..."
+	$(GO) test -v ./tests/e2e_test.go
+
 # Utility Targets
 test:
 	@echo ">> Running tests..."

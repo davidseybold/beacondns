@@ -17,13 +17,13 @@ func (b *Beacon) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg)
 	zone := b.zoneTrie.FindLongestMatch(qname)
 
 	if zone == "" {
-		log.Debug("no zone found, forwarding to next plugin")
+		blog.Debug("no zone found, forwarding to next plugin")
 		return plugin.NextOrFailure(b.Name(), b.Next, ctx, w, r)
 	}
 
 	answers, ok := b.lookup(zone, qname, dns.Type(qtype))
 	if !ok {
-		log.Debug("no answers found, returning not found response")
+		blog.Debug("no answers found, returning not found response")
 		return b.notFoundResponse(zone, state), nil
 	}
 

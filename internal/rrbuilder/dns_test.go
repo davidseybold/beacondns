@@ -54,6 +54,19 @@ func TestA(t *testing.T) {
 			wantErr: ErrInvalidIPv4Address,
 		},
 		{
+			name: "ipv6 address",
+			rrset: model.ResourceRecordSet{
+				Name: "example.com.",
+				Type: "A",
+				TTL:  300,
+				ResourceRecords: []model.ResourceRecord{
+					{Value: "2001:db8::1"},
+				},
+			},
+			want:    nil,
+			wantErr: ErrInvalidIPv4Address,
+		},
+		{
 			name: "empty resource records",
 			rrset: model.ResourceRecordSet{
 				Name:            "example.com.",
@@ -117,6 +130,19 @@ func TestAAAA(t *testing.T) {
 				TTL:  300,
 				ResourceRecords: []model.ResourceRecord{
 					{Value: "invalid-ipv6"},
+				},
+			},
+			want:    nil,
+			wantErr: ErrInvalidIPv6Address,
+		},
+		{
+			name: "ipv4 address",
+			rrset: model.ResourceRecordSet{
+				Name: "example.com.",
+				Type: "AAAA",
+				TTL:  300,
+				ResourceRecords: []model.ResourceRecord{
+					{Value: "192.168.1.1"},
 				},
 			},
 			want:    nil,

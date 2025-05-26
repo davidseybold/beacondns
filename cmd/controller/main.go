@@ -19,8 +19,9 @@ import (
 	"github.com/davidseybold/beacondns/internal/db/kvstore"
 	"github.com/davidseybold/beacondns/internal/db/postgres"
 	"github.com/davidseybold/beacondns/internal/dnsstore"
-	"github.com/davidseybold/beacondns/internal/logger"
+	"github.com/davidseybold/beacondns/internal/log"
 	"github.com/davidseybold/beacondns/internal/repository"
+	"github.com/davidseybold/beacondns/internal/responsepolicy"
 	"github.com/davidseybold/beacondns/internal/worker"
 	"github.com/davidseybold/beacondns/internal/zone"
 )
@@ -61,7 +62,7 @@ func main() {
 func start(ctx context.Context, w io.Writer) error {
 	var err error
 
-	log := logger.NewJSONLogger(slog.LevelInfo, w)
+	logger := log.NewJSONLogger(slog.LevelInfo, w)
 
 	cfg, err := loadConfig()
 	if err != nil {
@@ -82,6 +83,7 @@ func start(ctx context.Context, w io.Writer) error {
 
 	repoRegistry := repository.NewPostgresRepositoryRegistry(db)
 	zoneService := zone.NewService(repoRegistry)
+	responsePolicyService := responsepolicy.NewService(repoRegistry)
 
 	kvstore, err := kvstore.NewEtcdClient(cfg.EtcdEndpoints, kvstore.Scope{
 		Namespace: "beacon",
@@ -96,7 +98,7 @@ func start(ctx context.Context, w io.Writer) error {
 	workerCtx, workerCancel := context.WithCancel(ctx)
 	defer workerCancel()
 
-	worker := worker.New(repoRegistry, dnsStore, log)
+	worker := worker.New(repoRegistry, dnsStore, logger)
 
 	var g run.Group
 	{
@@ -104,7 +106,7 @@ func start(ctx context.Context, w io.Writer) error {
 			//TODO: I just picked a number, I don't know if this is a good value
 			ReadHeaderTimeout: time.Second * 10, //nolint:mnd,nolintlint
 			Addr:              fmt.Sprintf(":%d", cfg.Port),
-			Handler:           api.NewHTTPHandler(zoneService),
+			Handler:           api.NewHTTPHandler(logger, zoneService, responsePolicyService),
 		}
 		g.Add(
 			func() error {

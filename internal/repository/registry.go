@@ -15,10 +15,11 @@ import (
 type Registry interface {
 	GetZoneRepository() ZoneRepository
 	GetChangeRepository() ChangeRepository
+	GetResponsePolicyRepository() ResponsePolicyRepository
 }
 
 type Transactor interface {
-	InTx(ctx context.Context, txFunc TxFunc) (any, error)
+	InTx(ctx context.Context, txFunc TxFunc) error
 }
 
 type TransactorRegistry interface {
@@ -26,7 +27,7 @@ type TransactorRegistry interface {
 	Registry
 }
 
-type TxFunc func(ctx context.Context, r Registry) (any, error)
+type TxFunc func(ctx context.Context, r Registry) error
 
 type PostgresRepositoryRegistry struct {
 	db      postgres.PgxPool
@@ -51,6 +52,11 @@ func (r *PostgresRepositoryRegistry) GetChangeRepository() ChangeRepository {
 	return &PostgresChangeRepository{db}
 }
 
+func (r *PostgresRepositoryRegistry) GetResponsePolicyRepository() ResponsePolicyRepository {
+	db := r.getQueryer()
+	return &PostgresResponsePolicyRepository{db}
+}
+
 func (r *PostgresRepositoryRegistry) getQueryer() postgres.Queryer {
 	if r.queryer != nil {
 		return r.queryer
@@ -58,7 +64,7 @@ func (r *PostgresRepositoryRegistry) getQueryer() postgres.Queryer {
 	return r.db
 }
 
-func (r *PostgresRepositoryRegistry) InTx(ctx context.Context, txFunc TxFunc) (any, error) {
+func (r *PostgresRepositoryRegistry) InTx(ctx context.Context, txFunc TxFunc) error {
 	registry := r
 
 	var tx postgres.Tx
@@ -66,7 +72,7 @@ func (r *PostgresRepositoryRegistry) InTx(ctx context.Context, txFunc TxFunc) (a
 	if r.queryer == nil {
 		tx, err = r.db.Begin(ctx)
 		if err != nil {
-			return nil, fmt.Errorf("failed to begin transaction: %w", err)
+			return fmt.Errorf("failed to begin transaction: %w", err)
 		}
 
 		defer func() {
@@ -82,17 +88,17 @@ func (r *PostgresRepositoryRegistry) InTx(ctx context.Context, txFunc TxFunc) (a
 		}
 	}
 
-	result, err := txFunc(ctx, registry)
+	err = txFunc(ctx, registry)
 	if err != nil {
 		if xerr := tx.Rollback(ctx); xerr != nil && !errors.Is(xerr, pgx.ErrTxClosed) {
-			return nil, fmt.Errorf("rollback failed: %w; original error: %w", xerr, err)
+			return fmt.Errorf("rollback failed: %w; original error: %w", xerr, err)
 		}
-		return nil, err
+		return err
 	}
 
 	if err = tx.Commit(ctx); err != nil {
-		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	return result, nil
+	return nil
 }
