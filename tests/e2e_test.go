@@ -132,6 +132,7 @@ func runController(
 			FromDockerfile: testcontainers.FromDockerfile{
 				Context:    projectRoot,
 				Dockerfile: "tests/docker/Dockerfile.controller",
+				KeepImage:  true,
 			},
 			Env: map[string]string{
 				"BEACON_DB_HOST":         env.PostgresURL,
@@ -146,6 +147,9 @@ func runController(
 			Networks:     []string{network.Name},
 			NetworkAliases: map[string][]string{
 				network.Name: {"beacondns-controller"},
+			},
+			LogConsumerCfg: &testcontainers.LogConsumerConfig{
+				Consumers: []testcontainers.LogConsumer{&testcontainers.StdoutLogConsumer{}},
 			},
 		},
 		Started: true,
@@ -175,6 +179,7 @@ func runResolver(
 			FromDockerfile: testcontainers.FromDockerfile{
 				Context:    projectRoot,
 				Dockerfile: "tests/docker/Dockerfile.resolver",
+				KeepImage:  true,
 			},
 			Env: map[string]string{
 				"BEACON_ETCD_ENDPOINTS": env.EtcdURL,
@@ -185,6 +190,9 @@ func runResolver(
 			Networks:     []string{network.Name},
 			NetworkAliases: map[string][]string{
 				network.Name: {"beacondns-resolver"},
+			},
+			LogConsumerCfg: &testcontainers.LogConsumerConfig{
+				Consumers: []testcontainers.LogConsumer{&testcontainers.StdoutLogConsumer{}},
 			},
 		},
 		Started: true,

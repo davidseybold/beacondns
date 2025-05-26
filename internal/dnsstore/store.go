@@ -8,6 +8,7 @@ import (
 	"github.com/miekg/dns"
 
 	"github.com/davidseybold/beacondns/internal/db/kvstore"
+	"github.com/davidseybold/beacondns/internal/model"
 )
 
 const (
@@ -15,16 +16,52 @@ const (
 )
 
 var (
-	ErrNotFound = errors.New("not found")
+	ErrRRSetNotFound = errors.New("rrset not found")
 )
 
 type DNSStore interface {
+	ZoneStore
+	ResponsePolicyStore
+}
+
+type ResponsePolicyStore interface {
+}
+
+type ResponsePolicyReader interface {
+	WatchForResponsePolicyRuleChanges(ctx context.Context) (<-chan kvstore.Event, error)
+}
+
+type ResponsePolicyWriter interface {
+	PutResponsePolicy(ctx context.Context, policy model.ResponsePolicy) error
+}
+
+type ZoneStore interface {
+	ZoneReader
+	ZoneWriter
+}
+
+type ZoneReader interface {
 	GetRRSet(ctx context.Context, zone string, rrName string, rrType string) ([]dns.RR, error)
+	SubscribeToZoneEvents(ctx context.Context) (<-chan ZoneEvent, error)
+	GetZoneNames(ctx context.Context) ([]string, error)
+}
+
+type ZoneEventType string
+
+const (
+	ZoneEventTypeCreate ZoneEventType = "CREATE"
+	ZoneEventTypeDelete ZoneEventType = "DELETE"
+)
+
+type ZoneEvent struct {
+	Zone string
+	Type ZoneEventType
+}
+
+type ZoneWriter interface {
 	PutRRSet(ctx context.Context, zone string, rrName string, rrType string, rrset []dns.RR) error
 	DeleteRRSet(ctx context.Context, zone string, rrName string, rrType string) error
-	GetZoneNames(ctx context.Context) ([]string, error)
 	DeleteZone(ctx context.Context, zone string) error
-	WatchForZoneChanges(ctx context.Context) (<-chan kvstore.Event, error)
 	ZoneTxn(ctx context.Context, zone string) ZoneTransaction
 }
 
@@ -70,7 +107,7 @@ func (s *Store) GetRRSet(ctx context.Context, zone string, rrName string, rrType
 	}
 
 	if len(val) == 0 {
-		return nil, ErrNotFound
+		return nil, ErrRRSetNotFound
 	}
 
 	rrset, err := unmarshalRRSet(val[0].Value)
@@ -107,7 +144,7 @@ func (s *Store) DeleteRRSet(ctx context.Context, zone string, rrName string, rrT
 func (s *Store) GetZoneNames(ctx context.Context) ([]string, error) {
 	items, err := s.kvstore.Get(ctx, keyPrefixZones, kvstore.WithPrefix())
 	if err != nil && errors.Is(err, kvstore.ErrNotFound) {
-		return nil, nil
+		return []string{}, nil
 	} else if err != nil {
 		return nil, err
 	}
@@ -127,13 +164,44 @@ func (s *Store) DeleteZone(ctx context.Context, zone string) error {
 	tx := s.kvstore.Txn(ctx)
 
 	tx.Delete(zoneKey)
-	tx.Delete(recordSetPrefix)
+	tx.Delete(recordSetPrefix, kvstore.WithPrefix())
 
 	return tx.Commit()
 }
 
-func (s *Store) WatchForZoneChanges(ctx context.Context) (<-chan kvstore.Event, error) {
-	return s.kvstore.Watch(ctx, keyPrefixZones, kvstore.WithPrefix())
+func (s *Store) SubscribeToZoneEvents(ctx context.Context) (<-chan ZoneEvent, error) {
+	events := make(chan ZoneEvent, 100)
+
+	kvstoreEvents, err := s.kvstore.Watch(ctx, keyPrefixZones, kvstore.WithPrefix())
+	if err != nil {
+		return nil, err
+	}
+
+	go func(kvEvents <-chan kvstore.Event, zoneEvents chan<- ZoneEvent) {
+		defer close(zoneEvents)
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case kvstoreEvent := <-kvEvents:
+				var eventType ZoneEventType
+				switch kvstoreEvent.Type {
+				case kvstore.EventTypePut:
+					eventType = ZoneEventTypeCreate
+				case kvstore.EventTypeDelete:
+					eventType = ZoneEventTypeDelete
+				}
+
+				events <- ZoneEvent{
+					Zone: string(kvstoreEvent.Value),
+					Type: eventType,
+				}
+			}
+		}
+	}(kvstoreEvents, events)
+
+	return events, nil
 }
 
 func (t *zoneTransaction) CreateZoneMarker() ZoneTransaction {

@@ -9,7 +9,6 @@ import (
 	clog "github.com/coredns/coredns/plugin/pkg/log"
 	"github.com/miekg/dns"
 
-	"github.com/davidseybold/beacondns/internal/db/kvstore"
 	"github.com/davidseybold/beacondns/internal/dnsstore"
 )
 
@@ -36,7 +35,7 @@ func (b *Beacon) Name() string { return "beacon" }
 
 func (b *Beacon) lookup(zoneName, rrName string, t dns.Type) ([]dns.RR, bool) {
 	val, err := b.store.GetRRSet(context.Background(), zoneName, rrName, t.String())
-	if err != nil && errors.Is(err, dnsstore.ErrNotFound) {
+	if err != nil && errors.Is(err, dnsstore.ErrRRSetNotFound) {
 		return nil, false
 	} else if err != nil {
 		blog.Errorf("error looking up rrset %s for zone %s: %s", rrName, zoneName, err.Error())
@@ -46,17 +45,17 @@ func (b *Beacon) lookup(zoneName, rrName string, t dns.Type) ([]dns.RR, bool) {
 	return val, true
 }
 
-func (b *Beacon) listenForZoneChanges(ctx context.Context, ch <-chan kvstore.Event) {
+func (b *Beacon) listenForZoneChanges(ctx context.Context, ch <-chan dnsstore.ZoneEvent) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case event := <-ch:
 			switch event.Type {
-			case kvstore.EventTypePut:
-				b.zoneTrie.AddZone(string(event.Value))
-			case kvstore.EventTypeDelete:
-				b.zoneTrie.RemoveZone(string(event.Value))
+			case dnsstore.ZoneEventTypeCreate:
+				b.zoneTrie.AddZone(event.Zone)
+			case dnsstore.ZoneEventTypeDelete:
+				b.zoneTrie.RemoveZone(event.Zone)
 			}
 		}
 	}

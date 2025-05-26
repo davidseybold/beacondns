@@ -48,13 +48,13 @@ func (b *Beacon) OnStartup() error {
 
 	watchCtx, watchCancel := context.WithCancel(context.Background())
 
-	zoneChangeChan, err := b.store.WatchForZoneChanges(watchCtx)
+	zoneEventsCh, err := b.store.SubscribeToZoneEvents(watchCtx)
 	if err != nil {
 		watchCancel()
 		return fmt.Errorf("error watching zones: %w", err)
 	}
 
-	go b.listenForZoneChanges(watchCtx, zoneChangeChan)
+	go b.listenForZoneChanges(watchCtx, zoneEventsCh)
 
 	b.close = func() error {
 		watchCancel()
