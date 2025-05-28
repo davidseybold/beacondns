@@ -8,10 +8,9 @@ import (
 	"github.com/miekg/dns"
 
 	"github.com/davidseybold/beacondns/internal/model"
-	"github.com/davidseybold/beacondns/internal/rrbuilder"
 )
 
-type rule func(zone *model.Zone, changes []model.ResourceRecordSetChange) error
+type rule func(zone *model.Zone, changes []model.ChangeAction) error
 
 var rules = []rule{
 	supportedRRTypeRule,
@@ -24,9 +23,9 @@ var rules = []rule{
 	domainNameRule,
 }
 
-func validateChanges(zone *model.Zone, changes []model.ResourceRecordSetChange) error {
+func validateChanges(zone *model.Zone, change *model.Change) error {
 	for _, rule := range rules {
-		if err := rule(zone, changes); err != nil {
+		if err := rule(zone, change.Actions); err != nil {
 			return err
 		}
 	}
@@ -34,7 +33,7 @@ func validateChanges(zone *model.Zone, changes []model.ResourceRecordSetChange) 
 	return nil
 }
 
-func cnameRule(zone *model.Zone, changes []model.ResourceRecordSetChange) error {
+func cnameRule(zone *model.Zone, changes []model.ChangeAction) error {
 	cnameChangeNames := make(map[string]struct{})
 	for _, change := range changes {
 		if change.ResourceRecordSet.Type != model.RRTypeCNAME {
@@ -63,7 +62,7 @@ func cnameRule(zone *model.Zone, changes []model.ResourceRecordSetChange) error 
 	return nil
 }
 
-func soaRule(zone *model.Zone, changes []model.ResourceRecordSetChange) error {
+func soaRule(zone *model.Zone, changes []model.ChangeAction) error {
 	hasSOA := false
 	for _, rrset := range zone.ResourceRecordSets {
 		if rrset.Type == model.RRTypeSOA {
@@ -77,7 +76,7 @@ func soaRule(zone *model.Zone, changes []model.ResourceRecordSetChange) error {
 			continue
 		}
 
-		if change.Action == model.RRSetChangeActionDelete {
+		if change.ActionType == model.ChangeActionTypeDelete {
 			return fmt.Errorf("cannot delete SOA record: it is required for zone %s", zone.Name)
 		}
 
@@ -92,7 +91,7 @@ func soaRule(zone *model.Zone, changes []model.ResourceRecordSetChange) error {
 	return nil
 }
 
-func nsRule(zone *model.Zone, changes []model.ResourceRecordSetChange) error {
+func nsRule(zone *model.Zone, changes []model.ChangeAction) error {
 	hasNS := false
 	for _, rrset := range zone.ResourceRecordSets {
 		if rrset.Type == model.RRTypeNS {
@@ -103,7 +102,7 @@ func nsRule(zone *model.Zone, changes []model.ResourceRecordSetChange) error {
 
 	nsDeletions := 0
 	for _, change := range changes {
-		if change.ResourceRecordSet.Type == model.RRTypeNS && change.Action == model.RRSetChangeActionDelete {
+		if change.ResourceRecordSet.Type == model.RRTypeNS && change.ActionType == model.ChangeActionTypeDelete {
 			nsDeletions++
 		}
 	}
@@ -115,7 +114,7 @@ func nsRule(zone *model.Zone, changes []model.ResourceRecordSetChange) error {
 	if !hasNS {
 		addingNS := false
 		for _, change := range changes {
-			if change.ResourceRecordSet.Type == model.RRTypeNS && change.Action == model.RRSetChangeActionUpsert {
+			if change.ResourceRecordSet.Type == model.RRTypeNS && change.ActionType == model.ChangeActionTypeUpsert {
 				addingNS = true
 				break
 			}
@@ -128,7 +127,7 @@ func nsRule(zone *model.Zone, changes []model.ResourceRecordSetChange) error {
 	return nil
 }
 
-func apexRecordRule(zone *model.Zone, changes []model.ResourceRecordSetChange) error {
+func apexRecordRule(zone *model.Zone, changes []model.ChangeAction) error {
 	apexName := dns.Fqdn(zone.Name)
 
 	for _, change := range changes {
@@ -145,7 +144,7 @@ func apexRecordRule(zone *model.Zone, changes []model.ResourceRecordSetChange) e
 	return nil
 }
 
-func supportedRRTypeRule(_ *model.Zone, changes []model.ResourceRecordSetChange) error {
+func supportedRRTypeRule(_ *model.Zone, changes []model.ChangeAction) error {
 	for _, change := range changes {
 		if _, ok := model.SupportedRRTypes[change.ResourceRecordSet.Type]; !ok {
 			return fmt.Errorf("invalid record type %s: only supported types are %v",
@@ -159,7 +158,7 @@ func supportedRRTypeRule(_ *model.Zone, changes []model.ResourceRecordSetChange)
 }
 
 // ttlRule ensures TTL values are within valid range.
-func ttlRule(_ *model.Zone, changes []model.ResourceRecordSetChange) error {
+func ttlRule(_ *model.Zone, changes []model.ChangeAction) error {
 	const (
 		minTTL = 0
 		maxTTL = 2147483647 // 2^31 - 1
@@ -174,43 +173,9 @@ func ttlRule(_ *model.Zone, changes []model.ResourceRecordSetChange) error {
 	return nil
 }
 
-func recordValueRule(_ *model.Zone, changes []model.ResourceRecordSetChange) error {
+func recordValueRule(_ *model.Zone, changes []model.ChangeAction) error {
 	for _, change := range changes {
-		var err error
-		switch change.ResourceRecordSet.Type {
-		case model.RRTypeA:
-			_, err = rrbuilder.A(change.ResourceRecordSet)
-		case model.RRTypeAAAA:
-			_, err = rrbuilder.AAAA(change.ResourceRecordSet)
-		case model.RRTypeMX:
-			_, err = rrbuilder.MX(change.ResourceRecordSet)
-		case model.RRTypeSRV:
-			_, err = rrbuilder.SRV(change.ResourceRecordSet)
-		case model.RRTypeCNAME:
-			_, err = rrbuilder.CNAME(change.ResourceRecordSet)
-		case model.RRTypeTXT:
-			_, err = rrbuilder.TXT(change.ResourceRecordSet)
-		case model.RRTypeSOA:
-			_, err = rrbuilder.SOA(change.ResourceRecordSet)
-		case model.RRTypeNS:
-			_, err = rrbuilder.NS(change.ResourceRecordSet)
-		case model.RRTypePTR:
-			_, err = rrbuilder.PTR(change.ResourceRecordSet)
-		case model.RRTypeCAA:
-			_, err = rrbuilder.CAA(change.ResourceRecordSet)
-		case model.RRTypeDS:
-			_, err = rrbuilder.DS(change.ResourceRecordSet)
-		case model.RRTypeSSHFP:
-			_, err = rrbuilder.SSHFP(change.ResourceRecordSet)
-		case model.RRTypeTLSA:
-			_, err = rrbuilder.TLSA(change.ResourceRecordSet)
-		case model.RRTypeSVCB:
-			_, err = rrbuilder.SVCB(change.ResourceRecordSet)
-		case model.RRTypeHTTPS:
-			_, err = rrbuilder.HTTPS(change.ResourceRecordSet)
-		case model.RRTypeNAPTR:
-			_, err = rrbuilder.NAPTR(change.ResourceRecordSet)
-		}
+		_, err := ParseRRs(change.ResourceRecordSet)
 		if err != nil {
 			return fmt.Errorf("invalid record value: %w", err)
 		}
@@ -219,7 +184,7 @@ func recordValueRule(_ *model.Zone, changes []model.ResourceRecordSetChange) err
 }
 
 // domainNameRule ensures domain names are valid.
-func domainNameRule(zone *model.Zone, changes []model.ResourceRecordSetChange) error {
+func domainNameRule(zone *model.Zone, changes []model.ChangeAction) error {
 	for _, change := range changes {
 		// Check if the record name is a valid domain name
 		if !dns.IsFqdn(change.ResourceRecordSet.Name) {

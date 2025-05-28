@@ -2,9 +2,11 @@ package zone
 
 import (
 	"context"
+	"errors"
 
 	"github.com/miekg/dns"
 
+	"github.com/davidseybold/beacondns/internal/beaconerr"
 	"github.com/davidseybold/beacondns/internal/model"
 	"github.com/davidseybold/beacondns/internal/repository"
 )
@@ -82,16 +84,12 @@ func (d *DefaultService) CreateZone(ctx context.Context, name string) (*model.Zo
 
 	zone.ResourceRecordSets = []model.ResourceRecordSet{soaRecord, nsRecord}
 
-	zoneChange := model.NewZoneChange(
-		zoneName,
-		model.ZoneChangeActionCreate,
-		[]model.ResourceRecordSetChange{
-			model.NewResourceRecordSetChange(model.RRSetChangeActionUpsert, soaRecord),
-			model.NewResourceRecordSetChange(model.RRSetChangeActionUpsert, nsRecord),
-		},
-	)
+	soaChangeAction := model.NewChangeAction(model.ChangeActionTypeUpsert, &soaRecord)
+	nsChangeAction := model.NewChangeAction(model.ChangeActionTypeUpsert, &nsRecord)
 
-	change := model.NewChangeWithZoneChange(zoneChange, model.ChangeStatusPending)
+	change := model.NewChange(zone.ID, model.ChangeStatusPending, []model.ChangeAction{soaChangeAction, nsChangeAction})
+
+	event := NewCreateZoneEvent(zoneName, change.ID)
 
 	var zoneInfo *model.ZoneInfo
 	err := d.registry.InTx(ctx, func(ctx context.Context, r repository.Registry) error {
@@ -101,15 +99,22 @@ func (d *DefaultService) CreateZone(ctx context.Context, name string) (*model.Zo
 			return createZoneErr
 		}
 
-		_, createZoneErr = r.GetChangeRepository().CreateChange(ctx, change)
+		_, createZoneErr = r.GetZoneRepository().CreateChange(ctx, change)
+		if createZoneErr != nil {
+			return createZoneErr
+		}
+
+		createZoneErr = r.GetEventRepository().CreateEvent(ctx, event)
 		if createZoneErr != nil {
 			return createZoneErr
 		}
 
 		return nil
 	})
-	if err != nil {
-		return nil, err
+	if err != nil && errors.Is(err, repository.ErrEntityAlreadyExists) {
+		return nil, beaconerr.ErrZoneAlreadyExists("zone already exists")
+	} else if err != nil {
+		return nil, beaconerr.ErrInternalError("failed to create zone", err)
 	}
 
 	return zoneInfo, nil
@@ -118,15 +123,22 @@ func (d *DefaultService) CreateZone(ctx context.Context, name string) (*model.Zo
 func (d *DefaultService) GetZoneInfo(ctx context.Context, name string) (*model.ZoneInfo, error) {
 	zoneName := dns.Fqdn(name)
 	z, err := d.registry.GetZoneRepository().GetZoneInfo(ctx, zoneName)
-	if err != nil {
-		return nil, err
+	if err != nil && errors.Is(err, repository.ErrEntityNotFound) {
+		return nil, beaconerr.ErrNoSuchZone("zone not found")
+	} else if err != nil {
+		return nil, beaconerr.ErrInternalError("failed to get zone info", err)
 	}
 
 	return z, nil
 }
 
 func (d *DefaultService) ListZones(ctx context.Context) ([]model.ZoneInfo, error) {
-	return d.registry.GetZoneRepository().ListZoneInfos(ctx)
+	zones, err := d.registry.GetZoneRepository().ListZoneInfos(ctx)
+	if err != nil {
+		return nil, beaconerr.ErrInternalError("failed to list zones", err)
+	}
+
+	return zones, nil
 }
 
 func (d *DefaultService) UpsertResourceRecordSet(
@@ -136,28 +148,21 @@ func (d *DefaultService) UpsertResourceRecordSet(
 ) (*model.ResourceRecordSet, error) {
 	zoneName = dns.Fqdn(zoneName)
 	zone, err := d.registry.GetZoneRepository().GetZone(ctx, zoneName)
-	if err != nil {
-		return nil, err
+	if err != nil && errors.Is(err, repository.ErrEntityNotFound) {
+		return nil, beaconerr.ErrNoSuchZone("zone not found")
+	} else if err != nil {
+		return nil, beaconerr.ErrInternalError("failed to upsert resource record set", err)
 	}
 
 	rrSet.Name = dns.Fqdn(rrSet.Name)
 
-	rrcs := []model.ResourceRecordSetChange{
-		model.NewResourceRecordSetChange(model.RRSetChangeActionUpsert, *rrSet),
-	}
+	changeAction := model.NewChangeAction(model.ChangeActionTypeUpsert, rrSet)
 
-	zoneChange := model.NewZoneChange(
-		zone.Name,
-		model.ZoneChangeActionUpdate,
-		rrcs,
-	)
+	change := model.NewChange(zone.ID, model.ChangeStatusPending, []model.ChangeAction{changeAction})
 
-	change := model.NewChangeWithZoneChange(
-		zoneChange,
-		model.ChangeStatusPending,
-	)
+	changeEvent := NewChangeRRSetEvent(change.ID.String(), change.ID)
 
-	err = validateChanges(zone, rrcs)
+	err = validateChanges(zone, &change)
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +174,12 @@ func (d *DefaultService) UpsertResourceRecordSet(
 			return err
 		}
 
-		_, err = r.GetChangeRepository().CreateChange(ctx, change)
+		_, err = r.GetZoneRepository().CreateChange(ctx, change)
+		if err != nil {
+			return err
+		}
+
+		err = r.GetEventRepository().CreateEvent(ctx, changeEvent)
 		if err != nil {
 			return err
 		}
@@ -177,7 +187,7 @@ func (d *DefaultService) UpsertResourceRecordSet(
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, beaconerr.ErrInternalError("failed to upsert resource record set", err)
 	}
 
 	return newRRSet, nil
@@ -190,7 +200,13 @@ func (d *DefaultService) GetResourceRecordSet(
 	rrType model.RRType,
 ) (*model.ResourceRecordSet, error) {
 	zoneName = dns.Fqdn(zoneName)
-	return d.registry.GetZoneRepository().GetResourceRecordSet(ctx, zoneName, name, rrType)
+	rrSet, err := d.registry.GetZoneRepository().GetResourceRecordSet(ctx, zoneName, name, rrType)
+	if err != nil && errors.Is(err, repository.ErrEntityNotFound) {
+		return nil, beaconerr.ErrNoSuchResourceRecordSet("resource record set not found")
+	} else if err != nil {
+		return nil, beaconerr.ErrInternalError("failed to get resource record set", err)
+	}
+	return rrSet, nil
 }
 
 func (d *DefaultService) DeleteResourceRecordSet(
@@ -200,7 +216,43 @@ func (d *DefaultService) DeleteResourceRecordSet(
 	rrType model.RRType,
 ) error {
 	zoneName = dns.Fqdn(zoneName)
-	return d.registry.GetZoneRepository().DeleteResourceRecordSet(ctx, zoneName, name, rrType)
+	zone, err := d.registry.GetZoneRepository().GetZone(ctx, zoneName)
+	if err != nil && errors.Is(err, repository.ErrEntityNotFound) {
+		return beaconerr.ErrNoSuchZone("zone not found")
+	} else if err != nil {
+		return beaconerr.ErrInternalError("failed to delete resource record set", err)
+	}
+
+	changeAction := model.NewChangeAction(model.ChangeActionTypeDelete, nil)
+	change := model.NewChange(zone.ID, model.ChangeStatusPending, []model.ChangeAction{changeAction})
+
+	changeEvent := NewChangeRRSetEvent(change.ID.String(), change.ID)
+
+	err = d.registry.InTx(ctx, func(ctx context.Context, r repository.Registry) error {
+		deleteErr := r.GetZoneRepository().DeleteResourceRecordSet(ctx, zoneName, name, rrType)
+		if deleteErr != nil {
+			return err
+		}
+
+		_, deleteErr = r.GetZoneRepository().CreateChange(ctx, change)
+		if deleteErr != nil {
+			return err
+		}
+
+		deleteErr = r.GetEventRepository().CreateEvent(ctx, changeEvent)
+		if deleteErr != nil {
+			return err
+		}
+
+		return nil
+	})
+	if err != nil && errors.Is(err, repository.ErrEntityNotFound) {
+		return beaconerr.ErrNoSuchResourceRecordSet("resource record set not found")
+	} else if err != nil {
+		return beaconerr.ErrInternalError("failed to delete zone", err)
+	}
+
+	return nil
 }
 
 func (d *DefaultService) ListResourceRecordSets(
@@ -208,14 +260,18 @@ func (d *DefaultService) ListResourceRecordSets(
 	zoneName string,
 ) ([]model.ResourceRecordSet, error) {
 	zoneName = dns.Fqdn(zoneName)
-	return d.registry.GetZoneRepository().GetZoneResourceRecordSets(ctx, zoneName)
+	rrSets, err := d.registry.GetZoneRepository().GetZoneResourceRecordSets(ctx, zoneName)
+	if err != nil {
+		return nil, beaconerr.ErrInternalError("failed to list resource record sets", err)
+	}
+
+	return rrSets, nil
 }
 
 func (d *DefaultService) DeleteZone(ctx context.Context, name string) error {
 	zoneName := dns.Fqdn(name)
 
-	zoneChange := model.NewZoneChange(zoneName, model.ZoneChangeActionDelete, []model.ResourceRecordSetChange{})
-	change := model.NewChangeWithZoneChange(zoneChange, model.ChangeStatusPending)
+	event := NewDeleteZoneEvent(zoneName)
 
 	err := d.registry.InTx(ctx, func(ctx context.Context, r repository.Registry) error {
 		err := r.GetZoneRepository().DeleteZone(ctx, zoneName)
@@ -223,15 +279,17 @@ func (d *DefaultService) DeleteZone(ctx context.Context, name string) error {
 			return err
 		}
 
-		_, err = r.GetChangeRepository().CreateChange(ctx, change)
+		err = r.GetEventRepository().CreateEvent(ctx, event)
 		if err != nil {
 			return err
 		}
 
 		return nil
 	})
-	if err != nil {
-		return err
+	if err != nil && errors.Is(err, repository.ErrEntityNotFound) {
+		return beaconerr.ErrNoSuchZone("zone not found")
+	} else if err != nil {
+		return beaconerr.ErrInternalError("failed to delete zone", err)
 	}
 
 	return nil

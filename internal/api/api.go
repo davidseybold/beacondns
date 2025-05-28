@@ -2,10 +2,14 @@ package api
 
 import (
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
+	"github.com/go-playground/validator/v10"
+	"github.com/google/uuid"
 
 	"github.com/davidseybold/beacondns/internal/beaconerr"
 	"github.com/davidseybold/beacondns/internal/responsepolicy"
@@ -16,8 +20,17 @@ func NewHTTPHandler(
 	logger *slog.Logger,
 	zoneService zone.Service,
 	responsePolicyService responsepolicy.Service,
-) http.Handler {
+) (http.Handler, error) {
 	r := gin.Default()
+
+	if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
+		for name, fn := range validators {
+			err := v.RegisterValidation(name, fn)
+			if err != nil {
+				return nil, fmt.Errorf("error registering validator: %w", err)
+			}
+		}
+	}
 
 	handler := &handler{
 		logger:                logger,
@@ -42,13 +55,18 @@ func NewHTTPHandler(
 	{
 		g := r.Group("/v1/response-policies")
 		g.POST("", handler.CreateResponsePolicy)
-		// g.GET("", handler.ListPolicies)
-		// g.GET("/:policyID", handler.GetPolicy)
-		// g.PUT("/:policyID", handler.UpdatePolicy)
-		// g.DELETE("/:policyID", handler.DeletePolicy)
+		g.GET("", handler.ListResponsePolicies)
+		g.GET("/:policyID", handler.GetResponsePolicy)
+		g.PUT("/:policyID", handler.UpdateResponsePolicy)
+		g.DELETE("/:policyID", handler.DeleteResponsePolicy)
+		g.POST("/:policyID/rules", handler.CreateResponsePolicyRule)
+		g.GET("/:policyID/rules", handler.ListResponsePolicyRules)
+		g.GET("/:policyID/rules/:ruleID", handler.GetResponsePolicyRule)
+		g.PUT("/:policyID/rules/:ruleID", handler.UpdateResponsePolicyRule)
+		g.DELETE("/:policyID/rules/:ruleID", handler.DeleteResponsePolicyRule)
 	}
 
-	return r
+	return r, nil
 }
 
 type handler struct {
@@ -97,4 +115,34 @@ func (h *handler) handleError(c *gin.Context, err error) {
 			Message: "An unexpected error occurred",
 		})
 	}
+}
+
+func translateGinBindingError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	var errs validator.ValidationErrors
+	if !errors.As(err, &errs) {
+		return err
+	}
+
+	if len(errs) == 0 {
+		return err
+	}
+
+	field := errs[0].Field()
+
+	return beaconerr.ErrInvalidArgument(fmt.Sprintf("invalid %s", field), field)
+}
+
+func getUUIDParam(c *gin.Context, paramName string) (uuid.UUID, error) {
+	param := c.Param(paramName)
+
+	id, err := uuid.Parse(param)
+	if err != nil {
+		return uuid.Nil, beaconerr.ErrInvalidArgument("invalid "+paramName, paramName)
+	}
+
+	return id, nil
 }

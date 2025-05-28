@@ -35,6 +35,10 @@ type ResponsePolicyAlreadyExistsError struct {
 	beaconError
 }
 
+type ResponsePolicyRuleAlreadyExistsError struct {
+	beaconError
+}
+
 type NoSuchResponsePolicyError struct {
 	beaconError
 }
@@ -73,6 +77,10 @@ func parseError(errResponse errorResponse) error {
 		}
 	case beaconerr.ErrorCodeResponsePolicyAlreadyExists:
 		return &ResponsePolicyAlreadyExistsError{
+			beaconError: bErr,
+		}
+	case beaconerr.ErrorCodeResponsePolicyRuleAlreadyExists:
+		return &ResponsePolicyRuleAlreadyExistsError{
 			beaconError: bErr,
 		}
 	case beaconerr.ErrorCodeNoSuchResponsePolicy:

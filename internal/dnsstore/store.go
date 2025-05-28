@@ -3,21 +3,28 @@ package dnsstore
 import (
 	"context"
 	"errors"
-	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/miekg/dns"
 
 	"github.com/davidseybold/beacondns/internal/db/kvstore"
 	"github.com/davidseybold/beacondns/internal/model"
 )
 
-const (
-	keyPrefixZones = "/zones"
-)
-
 var (
 	ErrRRSetNotFound = errors.New("rrset not found")
 )
+
+type ResponsePolicyRuleMeta struct {
+	PolicyID   uuid.UUID `msg:"policyId"`
+	PolicyName string    `msg:"policyName"`
+}
+
+type ResponsePolicyRule struct {
+	model.ResponsePolicyRule
+	Priority uint                   `msg:"priority"`
+	Meta     ResponsePolicyRuleMeta `msg:"meta"`
+}
 
 type DNSStore interface {
 	ZoneStore
@@ -25,14 +32,29 @@ type DNSStore interface {
 }
 
 type ResponsePolicyStore interface {
-}
-
-type ResponsePolicyReader interface {
-	WatchForResponsePolicyRuleChanges(ctx context.Context) (<-chan kvstore.Event, error)
+	ResponsePolicyReader
+	ResponsePolicyWriter
 }
 
 type ResponsePolicyWriter interface {
-	PutResponsePolicy(ctx context.Context, policy model.ResponsePolicy) error
+	PutResponsePolicyRule(ctx context.Context, rule *ResponsePolicyRule) error
+}
+
+type ResponsePolicyReader interface {
+	SubscribeToResponsePolicyRuleEvents(ctx context.Context) (<-chan ResponsePolicyRuleEvent, error)
+	GetAllResponsePolicyRules(ctx context.Context) ([]ResponsePolicyRule, error)
+}
+
+type ResponsePolicyRuleEventType string
+
+const (
+	ResponsePolicyRuleEventTypeCreate ResponsePolicyRuleEventType = "CREATE"
+	ResponsePolicyRuleEventTypeDelete ResponsePolicyRuleEventType = "DELETE"
+)
+
+type ResponsePolicyRuleEvent struct {
+	Rule *ResponsePolicyRule
+	Type ResponsePolicyRuleEventType
 }
 
 type ZoneStore interface {
@@ -43,7 +65,7 @@ type ZoneStore interface {
 type ZoneReader interface {
 	GetRRSet(ctx context.Context, zone string, rrName string, rrType string) ([]dns.RR, error)
 	SubscribeToZoneEvents(ctx context.Context) (<-chan ZoneEvent, error)
-	GetZoneNames(ctx context.Context) ([]string, error)
+	GetAllZoneNames(ctx context.Context) ([]string, error)
 }
 
 type ZoneEventType string
@@ -141,7 +163,7 @@ func (s *Store) DeleteRRSet(ctx context.Context, zone string, rrName string, rrT
 	return s.kvstore.Delete(ctx, key)
 }
 
-func (s *Store) GetZoneNames(ctx context.Context) ([]string, error) {
+func (s *Store) GetAllZoneNames(ctx context.Context) ([]string, error) {
 	items, err := s.kvstore.Get(ctx, keyPrefixZones, kvstore.WithPrefix())
 	if err != nil && errors.Is(err, kvstore.ErrNotFound) {
 		return []string{}, nil
@@ -238,14 +260,75 @@ func (t *zoneTransaction) Commit() error {
 	return t.tx.Commit()
 }
 
-func createRecordKey(zoneName, rrName string, rrType string) string {
-	return fmt.Sprintf("/zone/%s/recordset/%s/%s", zoneName, rrName, rrType)
+func (s *Store) PutResponsePolicyRule(ctx context.Context, rule *ResponsePolicyRule) error {
+	key := createResponsePolicyRuleKey(rule)
+	val, err := marshalResponsePolicyRule(rule)
+	if err != nil {
+		return err
+	}
+
+	return s.kvstore.Put(ctx, key, val)
 }
 
-func createZonesKey(zoneName string) string {
-	return fmt.Sprintf("%s/%s", keyPrefixZones, zoneName)
+func (s *Store) GetAllResponsePolicyRules(ctx context.Context) ([]ResponsePolicyRule, error) {
+	items, err := s.kvstore.Get(ctx, keyPrefixResponsePolicy, kvstore.WithPrefix())
+	if err != nil {
+		return nil, err
+	}
+
+	rules := make([]ResponsePolicyRule, 0, len(items))
+	for _, item := range items {
+		rule, unmarshalErr := unmarshalResponsePolicyRule(item.Value)
+		if unmarshalErr != nil {
+			return nil, unmarshalErr
+		}
+		rules = append(rules, *rule)
+	}
+
+	return rules, nil
 }
 
-func createZoneRecordSetPrefix(zoneName string) string {
-	return fmt.Sprintf("/zone/%s/recordset", zoneName)
+func (s *Store) DeleteResponsePolicyRule(ctx context.Context, rule *ResponsePolicyRule) error {
+	key := createResponsePolicyRuleKey(rule)
+	return s.kvstore.Delete(ctx, key)
+}
+
+func (s *Store) SubscribeToResponsePolicyRuleEvents(ctx context.Context) (<-chan ResponsePolicyRuleEvent, error) {
+	events := make(chan ResponsePolicyRuleEvent, 100)
+
+	kvstoreEvents, err := s.kvstore.Watch(ctx, keyPrefixResponsePolicy, kvstore.WithPrefix())
+	if err != nil {
+		return nil, err
+	}
+
+	go func(kvEvents <-chan kvstore.Event, responsePolicyRuleEvents chan<- ResponsePolicyRuleEvent) {
+		defer close(responsePolicyRuleEvents)
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case kvstoreEvent := <-kvEvents:
+				var eventType ResponsePolicyRuleEventType
+				switch kvstoreEvent.Type {
+				case kvstore.EventTypePut:
+					eventType = ResponsePolicyRuleEventTypeCreate
+				case kvstore.EventTypeDelete:
+					eventType = ResponsePolicyRuleEventTypeDelete
+				}
+
+				rule, unmarshalErr := unmarshalResponsePolicyRule(kvstoreEvent.Value)
+				if unmarshalErr != nil {
+					continue
+				}
+
+				events <- ResponsePolicyRuleEvent{
+					Rule: rule,
+					Type: eventType,
+				}
+			}
+		}
+	}(kvstoreEvents, events)
+
+	return events, nil
 }

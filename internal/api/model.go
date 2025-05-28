@@ -28,14 +28,14 @@ type UpsertResourceRecordSetRequest struct {
 }
 
 type ResourceRecordSet struct {
-	Name            string           `json:"name"`
-	Type            string           `json:"type"`
-	TTL             uint32           `json:"ttl"`
-	ResourceRecords []ResourceRecord `json:"resourceRecords"`
+	Name            string           `json:"name"            binding:"required"`
+	Type            string           `json:"type"            binding:"required"`
+	TTL             uint32           `json:"ttl"             binding:"required"`
+	ResourceRecords []ResourceRecord `json:"resourceRecords" binding:"required,min=1"`
 }
 
 type ResourceRecord struct {
-	Value string `json:"value"`
+	Value string `json:"value" binding:"required"`
 }
 
 type ResponsePolicy struct {
@@ -56,22 +56,21 @@ type ResponsePolicyRule struct {
 }
 
 type CreateResponsePolicyRequest struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Priority    uint   `json:"priority"`
-	Enabled     bool   `json:"enabled"`
+	Name        string `json:"name"        binding:"required"`
+	Description string `json:"description" binding:"required"`
+	Priority    uint   `json:"priority"    binding:"required"`
 }
 
 type CreateResponsePolicyResponse struct {
-	ResponsePolicy
+	*ResponsePolicy
 }
 
 type CreateResponsePolicyRuleRequest struct {
-	Name         string              `json:"name"`
-	TriggerType  string              `json:"triggerType"`
-	TriggerValue string              `json:"triggerValue"`
-	ActionType   string              `json:"actionType"`
-	LocalData    []ResourceRecordSet `json:"localData"`
+	Name         string              `json:"name"         binding:"required"`
+	TriggerType  string              `json:"triggerType"  binding:"required,responsePolicyRuleTriggerType"`
+	TriggerValue string              `json:"triggerValue" binding:"required"`
+	ActionType   string              `json:"actionType"   binding:"required,responsePolicyRuleActionType"`
+	LocalData    []ResourceRecordSet `json:"localData"    binding:"responsePolicyRuleLocalData"`
 }
 
 type CreateResponsePolicyRuleResponse struct {
@@ -95,11 +94,9 @@ type GetResponsePolicyRuleResponse struct {
 }
 
 type UpdateResponsePolicyRequest struct {
-	Name         string              `json:"name"`
-	TriggerType  string              `json:"triggerType"`
-	TriggerValue string              `json:"triggerValue"`
-	ActionType   string              `json:"actionType"`
-	LocalData    []ResourceRecordSet `json:"localData"`
+	Name        string `json:"name"        binding:"required"`
+	Description string `json:"description" binding:"required"`
+	Priority    uint   `json:"priority"    binding:"required"`
 }
 
 type UpdateResponsePolicyResponse struct {
@@ -116,4 +113,12 @@ type UpdateResponsePolicyRuleRequest struct {
 
 type UpdateResponsePolicyRuleResponse struct {
 	ResponsePolicyRule
+}
+
+type ToggleResponsePolicyRequest struct {
+	Enabled bool `json:"enabled"`
+}
+
+type ToggleResponsePolicyResponse struct {
+	ResponsePolicy
 }

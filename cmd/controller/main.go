@@ -82,9 +82,6 @@ func start(ctx context.Context, w io.Writer) error {
 	defer db.Close()
 
 	repoRegistry := repository.NewPostgresRepositoryRegistry(db)
-	zoneService := zone.NewService(repoRegistry)
-	responsePolicyService := responsepolicy.NewService(repoRegistry)
-
 	kvstore, err := kvstore.NewEtcdClient(cfg.EtcdEndpoints, kvstore.Scope{
 		Namespace: "beacon",
 	})
@@ -95,10 +92,32 @@ func start(ctx context.Context, w io.Writer) error {
 
 	dnsStore := dnsstore.New(kvstore)
 
+	zoneService := zone.NewService(repoRegistry)
+	zoneEventProcessor := zone.NewEventProcessor(&zone.EventProcessorDeps{
+		Repository: repoRegistry,
+		DNSStore:   dnsStore,
+		Logger:     logger,
+	})
+
+	responsePolicyService := responsepolicy.NewService(repoRegistry)
+	responsePolicyEventProcessor := responsepolicy.NewEventProcessor(&responsepolicy.EventProcessorDeps{
+		Repository: repoRegistry,
+		Logger:     logger,
+	})
+
 	workerCtx, workerCancel := context.WithCancel(ctx)
 	defer workerCancel()
 
-	worker := worker.New(repoRegistry, dnsStore, logger)
+	worker := worker.New(
+		repoRegistry,
+		logger,
+		[]worker.EventProcessor{zoneEventProcessor, responsePolicyEventProcessor},
+	)
+
+	handler, err := api.NewHTTPHandler(logger, zoneService, responsePolicyService)
+	if err != nil {
+		return fmt.Errorf("error creating HTTP handler: %w", err)
+	}
 
 	var g run.Group
 	{
@@ -106,7 +125,7 @@ func start(ctx context.Context, w io.Writer) error {
 			//TODO: I just picked a number, I don't know if this is a good value
 			ReadHeaderTimeout: time.Second * 10, //nolint:mnd,nolintlint
 			Addr:              fmt.Sprintf(":%d", cfg.Port),
-			Handler:           api.NewHTTPHandler(logger, zoneService, responsePolicyService),
+			Handler:           handler,
 		}
 		g.Add(
 			func() error {

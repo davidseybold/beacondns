@@ -35,7 +35,7 @@ func (h *handler) ListZones(c *gin.Context) {
 func (h *handler) CreateZone(c *gin.Context) {
 	var body CreateZoneRequest
 	if err := c.ShouldBindJSON(&body); err != nil {
-		h.handleError(c, beaconerr.ErrInvalidArgument("invalid request body", ""))
+		h.handleError(c, translateGinBindingError(err))
 		return
 	}
 
@@ -78,19 +78,19 @@ func (h *handler) UpsertResourceRecordSet(c *gin.Context) {
 
 	var body UpsertResourceRecordSetRequest
 	if err := c.ShouldBindJSON(&body); err != nil {
-		h.handleError(c, beaconerr.ErrInvalidArgument("invalid request body", ""))
+		h.handleError(c, translateGinBindingError(err))
 		return
 	}
 
-	rrSet := convertAPIResourceRecordSetToModel(body.ResourceRecordSet)
+	rrSet := convertAPIResourceRecordSetToModel(&body.ResourceRecordSet)
 
-	newRRSet, err := h.zoneService.UpsertResourceRecordSet(c.Request.Context(), zoneName, &rrSet)
+	newRRSet, err := h.zoneService.UpsertResourceRecordSet(c.Request.Context(), zoneName, rrSet)
 	if err != nil {
 		h.handleError(c, err)
 		return
 	}
 
-	c.JSON(http.StatusOK, convertModelResourceRecordSetToAPI(*newRRSet))
+	c.JSON(http.StatusOK, convertModelResourceRecordSetToAPI(newRRSet))
 }
 
 func (h *handler) ListResourceRecordSets(c *gin.Context) {
@@ -200,5 +200,5 @@ func (h *handler) GetResourceRecordSet(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, convertModelResourceRecordSetToAPI(*rrSet))
+	c.JSON(http.StatusOK, convertModelResourceRecordSetToAPI(rrSet))
 }

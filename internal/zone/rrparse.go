@@ -1,4 +1,4 @@
-package rrbuilder
+package zone
 
 import (
 	"errors"
@@ -64,7 +64,46 @@ var (
 	ErrInvalidMandatoryKey          = errors.New("invalid mandatory key")
 )
 
-func A(rrset model.ResourceRecordSet) ([]dns.RR, error) {
+func ParseRRs(rrset *model.ResourceRecordSet) ([]dns.RR, error) {
+	switch rrset.Type {
+	case model.RRTypeA:
+		return A(rrset)
+	case model.RRTypeAAAA:
+		return AAAA(rrset)
+	case model.RRTypeCNAME:
+		return CNAME(rrset)
+	case model.RRTypeSOA:
+		return SOA(rrset)
+	case model.RRTypeNS:
+		return NS(rrset)
+	case model.RRTypeSRV:
+		return SRV(rrset)
+	case model.RRTypeSVCB:
+		return SVCB(rrset)
+	case model.RRTypeHTTPS:
+		return HTTPS(rrset)
+	case model.RRTypeNAPTR:
+		return NAPTR(rrset)
+	case model.RRTypeSSHFP:
+		return SSHFP(rrset)
+	case model.RRTypeTLSA:
+		return TLSA(rrset)
+	case model.RRTypeTXT:
+		return TXT(rrset)
+	case model.RRTypeCAA:
+		return CAA(rrset)
+	case model.RRTypeDS:
+		return DS(rrset)
+	case model.RRTypePTR:
+		return PTR(rrset)
+	case model.RRTypeMX:
+		return MX(rrset)
+	}
+
+	return nil, fmt.Errorf("invalid record type: %s", rrset.Type)
+}
+
+func A(rrset *model.ResourceRecordSet) ([]dns.RR, error) {
 	if len(rrset.ResourceRecords) == 0 {
 		return nil, ErrNoResourceRecords
 	}
@@ -85,7 +124,7 @@ func A(rrset model.ResourceRecordSet) ([]dns.RR, error) {
 	return dnsRRs, nil
 }
 
-func AAAA(rrset model.ResourceRecordSet) ([]dns.RR, error) {
+func AAAA(rrset *model.ResourceRecordSet) ([]dns.RR, error) {
 	if len(rrset.ResourceRecords) == 0 {
 		return nil, ErrNoResourceRecords
 	}
@@ -105,7 +144,7 @@ func AAAA(rrset model.ResourceRecordSet) ([]dns.RR, error) {
 	return dnsRRs, nil
 }
 
-func CAA(rrset model.ResourceRecordSet) ([]dns.RR, error) {
+func CAA(rrset *model.ResourceRecordSet) ([]dns.RR, error) {
 	if len(rrset.ResourceRecords) == 0 {
 		return nil, ErrNoResourceRecords
 	}
@@ -140,7 +179,7 @@ func CAA(rrset model.ResourceRecordSet) ([]dns.RR, error) {
 	return dnsRRs, nil
 }
 
-func CNAME(rrset model.ResourceRecordSet) ([]dns.RR, error) {
+func CNAME(rrset *model.ResourceRecordSet) ([]dns.RR, error) {
 	if len(rrset.ResourceRecords) == 0 {
 		return nil, ErrNoResourceRecords
 	}
@@ -157,7 +196,7 @@ func CNAME(rrset model.ResourceRecordSet) ([]dns.RR, error) {
 	return dnsRRs, nil
 }
 
-func DS(rrset model.ResourceRecordSet) ([]dns.RR, error) {
+func DS(rrset *model.ResourceRecordSet) ([]dns.RR, error) {
 	if len(rrset.ResourceRecords) == 0 {
 		return nil, ErrNoResourceRecords
 	}
@@ -198,7 +237,7 @@ func DS(rrset model.ResourceRecordSet) ([]dns.RR, error) {
 	return dnsRRs, nil
 }
 
-func HTTPS(rrset model.ResourceRecordSet) ([]dns.RR, error) {
+func HTTPS(rrset *model.ResourceRecordSet) ([]dns.RR, error) {
 	if len(rrset.ResourceRecords) == 0 {
 		return nil, ErrNoResourceRecords
 	}
@@ -223,7 +262,7 @@ func HTTPS(rrset model.ResourceRecordSet) ([]dns.RR, error) {
 	return dnsRRs, nil
 }
 
-func MX(rrset model.ResourceRecordSet) ([]dns.RR, error) {
+func MX(rrset *model.ResourceRecordSet) ([]dns.RR, error) {
 	if len(rrset.ResourceRecords) == 0 {
 		return nil, ErrNoResourceRecords
 	}
@@ -251,7 +290,7 @@ func MX(rrset model.ResourceRecordSet) ([]dns.RR, error) {
 	return dnsRRs, nil
 }
 
-func NAPTR(rrset model.ResourceRecordSet) ([]dns.RR, error) {
+func NAPTR(rrset *model.ResourceRecordSet) ([]dns.RR, error) {
 	if len(rrset.ResourceRecords) == 0 {
 		return nil, ErrNoResourceRecords
 	}
@@ -313,7 +352,7 @@ func assertQuoted(value string) bool {
 	return strings.HasPrefix(value, "\"") && strings.HasSuffix(value, "\"")
 }
 
-func NS(rrset model.ResourceRecordSet) ([]dns.RR, error) {
+func NS(rrset *model.ResourceRecordSet) ([]dns.RR, error) {
 	if len(rrset.ResourceRecords) == 0 {
 		return nil, ErrNoResourceRecords
 	}
@@ -329,7 +368,7 @@ func NS(rrset model.ResourceRecordSet) ([]dns.RR, error) {
 	return dnsRRs, nil
 }
 
-func PTR(rrset model.ResourceRecordSet) ([]dns.RR, error) {
+func PTR(rrset *model.ResourceRecordSet) ([]dns.RR, error) {
 	if len(rrset.ResourceRecords) == 0 {
 		return nil, ErrNoResourceRecords
 	}
@@ -345,7 +384,7 @@ func PTR(rrset model.ResourceRecordSet) ([]dns.RR, error) {
 	return dnsRRs, nil
 }
 
-func SOA(rrset model.ResourceRecordSet) ([]dns.RR, error) {
+func SOA(rrset *model.ResourceRecordSet) ([]dns.RR, error) {
 	if len(rrset.ResourceRecords) == 0 {
 		return nil, ErrNoResourceRecords
 	}
@@ -396,7 +435,7 @@ func SOA(rrset model.ResourceRecordSet) ([]dns.RR, error) {
 	return []dns.RR{r}, nil
 }
 
-func SRV(rrset model.ResourceRecordSet) ([]dns.RR, error) {
+func SRV(rrset *model.ResourceRecordSet) ([]dns.RR, error) {
 	if len(rrset.ResourceRecords) == 0 {
 		return nil, ErrNoResourceRecords
 	}
@@ -442,7 +481,7 @@ func SRV(rrset model.ResourceRecordSet) ([]dns.RR, error) {
 	return dnsRRs, nil
 }
 
-func SSHFP(rrset model.ResourceRecordSet) ([]dns.RR, error) {
+func SSHFP(rrset *model.ResourceRecordSet) ([]dns.RR, error) {
 	if len(rrset.ResourceRecords) == 0 {
 		return nil, ErrNoResourceRecords
 	}
@@ -479,7 +518,7 @@ func SSHFP(rrset model.ResourceRecordSet) ([]dns.RR, error) {
 	return dnsRRs, nil
 }
 
-func SVCB(rrset model.ResourceRecordSet) ([]dns.RR, error) {
+func SVCB(rrset *model.ResourceRecordSet) ([]dns.RR, error) {
 	if len(rrset.ResourceRecords) == 0 {
 		return nil, ErrNoResourceRecords
 	}
@@ -668,7 +707,7 @@ func parseMandatory(val string) (*dns.SVCBMandatory, error) {
 	}, nil
 }
 
-func TLSA(rrset model.ResourceRecordSet) ([]dns.RR, error) {
+func TLSA(rrset *model.ResourceRecordSet) ([]dns.RR, error) {
 	if len(rrset.ResourceRecords) == 0 {
 		return nil, ErrNoResourceRecords
 	}
@@ -720,7 +759,7 @@ func TLSA(rrset model.ResourceRecordSet) ([]dns.RR, error) {
 	return dnsRRs, nil
 }
 
-func TXT(rrset model.ResourceRecordSet) ([]dns.RR, error) {
+func TXT(rrset *model.ResourceRecordSet) ([]dns.RR, error) {
 	if len(rrset.ResourceRecords) == 0 {
 		return nil, ErrNoResourceRecords
 	}

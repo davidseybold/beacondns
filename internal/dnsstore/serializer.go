@@ -56,3 +56,16 @@ func unmarshalRRSet(data []byte) (*rrSet, error) {
 	}
 	return rrset, nil
 }
+
+func marshalResponsePolicyRule(rule *ResponsePolicyRule) ([]byte, error) {
+	return msgpack.Marshal(rule)
+}
+
+func unmarshalResponsePolicyRule(data []byte) (*ResponsePolicyRule, error) {
+	rule := &ResponsePolicyRule{}
+	err := msgpack.Unmarshal(data, rule)
+	if err != nil {
+		return nil, err
+	}
+	return rule, nil
+}

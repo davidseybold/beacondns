@@ -3,5 +3,6 @@ package repository
 import "errors"
 
 var (
-	ErrNotFound = errors.New("not found")
+	ErrEntityNotFound      = errors.New("entity not found")
+	ErrEntityAlreadyExists = errors.New("entity already exists")
 )

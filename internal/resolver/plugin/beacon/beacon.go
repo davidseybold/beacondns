@@ -62,7 +62,7 @@ func (b *Beacon) listenForZoneChanges(ctx context.Context, ch <-chan dnsstore.Zo
 }
 
 func (b *Beacon) loadZones() error {
-	zoneNames, err := b.store.GetZoneNames(context.Background())
+	zoneNames, err := b.store.GetAllZoneNames(context.Background())
 	if err != nil {
 		return fmt.Errorf("error getting zones: %w", err)
 	}

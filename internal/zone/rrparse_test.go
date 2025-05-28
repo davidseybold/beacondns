@@ -1,4 +1,4 @@
-package rrbuilder
+package zone
 
 import (
 	"net"
@@ -13,13 +13,13 @@ import (
 func TestA(t *testing.T) {
 	tests := []struct {
 		name    string
-		rrset   model.ResourceRecordSet
+		rrset   *model.ResourceRecordSet
 		want    []dns.RR
 		wantErr error
 	}{
 		{
 			name: "valid A record",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "example.com.",
 				Type: "A",
 				TTL:  300,
@@ -42,7 +42,7 @@ func TestA(t *testing.T) {
 		},
 		{
 			name: "invalid IPv4 address",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "example.com.",
 				Type: "A",
 				TTL:  300,
@@ -55,7 +55,7 @@ func TestA(t *testing.T) {
 		},
 		{
 			name: "ipv6 address",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "example.com.",
 				Type: "A",
 				TTL:  300,
@@ -68,7 +68,7 @@ func TestA(t *testing.T) {
 		},
 		{
 			name: "empty resource records",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name:            "example.com.",
 				Type:            "A",
 				TTL:             300,
@@ -95,13 +95,13 @@ func TestA(t *testing.T) {
 func TestAAAA(t *testing.T) {
 	tests := []struct {
 		name    string
-		rrset   model.ResourceRecordSet
+		rrset   *model.ResourceRecordSet
 		want    []dns.RR
 		wantErr error
 	}{
 		{
 			name: "valid AAAA record",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "example.com.",
 				Type: "AAAA",
 				TTL:  300,
@@ -124,7 +124,7 @@ func TestAAAA(t *testing.T) {
 		},
 		{
 			name: "invalid IPv6 address",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "example.com.",
 				Type: "AAAA",
 				TTL:  300,
@@ -137,7 +137,7 @@ func TestAAAA(t *testing.T) {
 		},
 		{
 			name: "ipv4 address",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "example.com.",
 				Type: "AAAA",
 				TTL:  300,
@@ -150,7 +150,7 @@ func TestAAAA(t *testing.T) {
 		},
 		{
 			name: "empty resource records",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name:            "example.com.",
 				Type:            "AAAA",
 				TTL:             300,
@@ -177,13 +177,13 @@ func TestAAAA(t *testing.T) {
 func TestCNAME(t *testing.T) {
 	tests := []struct {
 		name    string
-		rrset   model.ResourceRecordSet
+		rrset   *model.ResourceRecordSet
 		want    []dns.RR
 		wantErr error
 	}{
 		{
 			name: "valid CNAME record",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "www.example.com.",
 				Type: "CNAME",
 				TTL:  300,
@@ -206,7 +206,7 @@ func TestCNAME(t *testing.T) {
 		},
 		{
 			name: "empty resource records",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name:            "www.example.com.",
 				Type:            "CNAME",
 				TTL:             300,
@@ -233,13 +233,13 @@ func TestCNAME(t *testing.T) {
 func TestMX(t *testing.T) {
 	tests := []struct {
 		name    string
-		rrset   model.ResourceRecordSet
+		rrset   *model.ResourceRecordSet
 		want    []dns.RR
 		wantErr error
 	}{
 		{
 			name: "valid MX record",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "example.com.",
 				Type: "MX",
 				TTL:  300,
@@ -263,7 +263,7 @@ func TestMX(t *testing.T) {
 		},
 		{
 			name: "invalid MX priority",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "example.com.",
 				Type: "MX",
 				TTL:  300,
@@ -276,7 +276,7 @@ func TestMX(t *testing.T) {
 		},
 		{
 			name: "invalid MX format",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "example.com.",
 				Type: "MX",
 				TTL:  300,
@@ -289,7 +289,7 @@ func TestMX(t *testing.T) {
 		},
 		{
 			name: "empty resource records",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name:            "example.com.",
 				Type:            "MX",
 				TTL:             300,
@@ -316,13 +316,13 @@ func TestMX(t *testing.T) {
 func TestNS(t *testing.T) {
 	tests := []struct {
 		name    string
-		rrset   model.ResourceRecordSet
+		rrset   *model.ResourceRecordSet
 		want    []dns.RR
 		wantErr error
 	}{
 		{
 			name: "valid NS record",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "example.com.",
 				Type: "NS",
 				TTL:  300,
@@ -345,7 +345,7 @@ func TestNS(t *testing.T) {
 		},
 		{
 			name: "empty resource records",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name:            "example.com.",
 				Type:            "NS",
 				TTL:             300,
@@ -372,13 +372,13 @@ func TestNS(t *testing.T) {
 func TestPTR(t *testing.T) {
 	tests := []struct {
 		name    string
-		rrset   model.ResourceRecordSet
+		rrset   *model.ResourceRecordSet
 		want    []dns.RR
 		wantErr error
 	}{
 		{
 			name: "valid PTR record",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "1.1.168.192.in-addr.arpa.",
 				Type: "PTR",
 				TTL:  300,
@@ -401,7 +401,7 @@ func TestPTR(t *testing.T) {
 		},
 		{
 			name: "empty resource records",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name:            "1.1.168.192.in-addr.arpa.",
 				Type:            "PTR",
 				TTL:             300,
@@ -428,13 +428,13 @@ func TestPTR(t *testing.T) {
 func TestSOA(t *testing.T) {
 	tests := []struct {
 		name    string
-		rrset   model.ResourceRecordSet
+		rrset   *model.ResourceRecordSet
 		want    []dns.RR
 		wantErr error
 	}{
 		{
 			name: "valid SOA record",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "example.com.",
 				Type: "SOA",
 				TTL:  300,
@@ -463,7 +463,7 @@ func TestSOA(t *testing.T) {
 		},
 		{
 			name: "invalid SOA field count",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "example.com.",
 				Type: "SOA",
 				TTL:  300,
@@ -476,7 +476,7 @@ func TestSOA(t *testing.T) {
 		},
 		{
 			name: "invalid SOA serial",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "example.com.",
 				Type: "SOA",
 				TTL:  300,
@@ -489,7 +489,7 @@ func TestSOA(t *testing.T) {
 		},
 		{
 			name: "empty resource records",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name:            "example.com.",
 				Type:            "SOA",
 				TTL:             300,
@@ -516,13 +516,13 @@ func TestSOA(t *testing.T) {
 func TestSRV(t *testing.T) {
 	tests := []struct {
 		name    string
-		rrset   model.ResourceRecordSet
+		rrset   *model.ResourceRecordSet
 		want    []dns.RR
 		wantErr error
 	}{
 		{
 			name: "valid SRV record",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "_sip._tcp.example.com.",
 				Type: "SRV",
 				TTL:  300,
@@ -548,7 +548,7 @@ func TestSRV(t *testing.T) {
 		},
 		{
 			name: "invalid SRV field count",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "_sip._tcp.example.com.",
 				Type: "SRV",
 				TTL:  300,
@@ -561,7 +561,7 @@ func TestSRV(t *testing.T) {
 		},
 		{
 			name: "invalid SRV priority",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "_sip._tcp.example.com.",
 				Type: "SRV",
 				TTL:  300,
@@ -574,7 +574,7 @@ func TestSRV(t *testing.T) {
 		},
 		{
 			name: "invalid SRV weight",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "_sip._tcp.example.com.",
 				Type: "SRV",
 				TTL:  300,
@@ -587,7 +587,7 @@ func TestSRV(t *testing.T) {
 		},
 		{
 			name: "invalid SRV port",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "_sip._tcp.example.com.",
 				Type: "SRV",
 				TTL:  300,
@@ -600,7 +600,7 @@ func TestSRV(t *testing.T) {
 		},
 		{
 			name: "empty resource records",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name:            "_sip._tcp.example.com.",
 				Type:            "SRV",
 				TTL:             300,
@@ -627,13 +627,13 @@ func TestSRV(t *testing.T) {
 func TestTXT(t *testing.T) {
 	tests := []struct {
 		name    string
-		rrset   model.ResourceRecordSet
+		rrset   *model.ResourceRecordSet
 		want    []dns.RR
 		wantErr error
 	}{
 		{
 			name: "quoted TXT record",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "example.com.",
 				Type: "TXT",
 				TTL:  300,
@@ -656,7 +656,7 @@ func TestTXT(t *testing.T) {
 		},
 		{
 			name: "non-quoted TXT value",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "example.com.",
 				Type: "TXT",
 				TTL:  300,
@@ -679,7 +679,7 @@ func TestTXT(t *testing.T) {
 		},
 		{
 			name: "mixed quoted and non-quoted TXT value",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "example.com.",
 				Type: "TXT",
 				TTL:  300,
@@ -692,7 +692,7 @@ func TestTXT(t *testing.T) {
 		},
 		{
 			name: "multiple TXT strings",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "example.com.",
 				Type: "TXT",
 				TTL:  300,
@@ -715,7 +715,7 @@ func TestTXT(t *testing.T) {
 		},
 		{
 			name: "empty resource records",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name:            "example.com.",
 				Type:            "TXT",
 				TTL:             300,
@@ -742,13 +742,13 @@ func TestTXT(t *testing.T) {
 func TestCAA(t *testing.T) {
 	tests := []struct {
 		name    string
-		rrset   model.ResourceRecordSet
+		rrset   *model.ResourceRecordSet
 		want    []dns.RR
 		wantErr error
 	}{
 		{
 			name: "valid CAA record",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "example.com.",
 				Type: "CAA",
 				TTL:  300,
@@ -773,7 +773,7 @@ func TestCAA(t *testing.T) {
 		},
 		{
 			name: "invalid CAA field count",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "example.com.",
 				Type: "CAA",
 				TTL:  300,
@@ -786,7 +786,7 @@ func TestCAA(t *testing.T) {
 		},
 		{
 			name: "invalid CAA flag",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "example.com.",
 				Type: "CAA",
 				TTL:  300,
@@ -799,7 +799,7 @@ func TestCAA(t *testing.T) {
 		},
 		{
 			name: "empty resource records",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name:            "example.com.",
 				Type:            "CAA",
 				TTL:             300,
@@ -826,13 +826,13 @@ func TestCAA(t *testing.T) {
 func TestDS(t *testing.T) {
 	tests := []struct {
 		name    string
-		rrset   model.ResourceRecordSet
+		rrset   *model.ResourceRecordSet
 		want    []dns.RR
 		wantErr error
 	}{
 		{
 			name: "valid DS record",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "example.com.",
 				Type: "DS",
 				TTL:  300,
@@ -858,7 +858,7 @@ func TestDS(t *testing.T) {
 		},
 		{
 			name: "invalid DS field count",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "example.com.",
 				Type: "DS",
 				TTL:  300,
@@ -871,7 +871,7 @@ func TestDS(t *testing.T) {
 		},
 		{
 			name: "invalid DS key tag",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "example.com.",
 				Type: "DS",
 				TTL:  300,
@@ -884,7 +884,7 @@ func TestDS(t *testing.T) {
 		},
 		{
 			name: "empty resource records",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name:            "example.com.",
 				Type:            "DS",
 				TTL:             300,
@@ -911,13 +911,13 @@ func TestDS(t *testing.T) {
 func TestHTTPS(t *testing.T) {
 	tests := []struct {
 		name    string
-		rrset   model.ResourceRecordSet
+		rrset   *model.ResourceRecordSet
 		want    []dns.RR
 		wantErr error
 	}{
 		{
 			name: "valid HTTPS record with all key values",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "example.com.",
 				Type: "HTTPS",
 				TTL:  300,
@@ -974,7 +974,7 @@ func TestHTTPS(t *testing.T) {
 		},
 		{
 			name: "valid HTTPS record with minimal key values",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "example.com.",
 				Type: "HTTPS",
 				TTL:  300,
@@ -1005,7 +1005,7 @@ func TestHTTPS(t *testing.T) {
 		},
 		{
 			name: "invalid HTTPS field count",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "example.com.",
 				Type: "HTTPS",
 				TTL:  300,
@@ -1018,7 +1018,7 @@ func TestHTTPS(t *testing.T) {
 		},
 		{
 			name: "invalid HTTPS priority",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "example.com.",
 				Type: "HTTPS",
 				TTL:  300,
@@ -1031,7 +1031,7 @@ func TestHTTPS(t *testing.T) {
 		},
 		{
 			name: "invalid HTTPS port",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "example.com.",
 				Type: "HTTPS",
 				TTL:  300,
@@ -1044,7 +1044,7 @@ func TestHTTPS(t *testing.T) {
 		},
 		{
 			name: "invalid HTTPS IPv4 hint",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "example.com.",
 				Type: "HTTPS",
 				TTL:  300,
@@ -1057,7 +1057,7 @@ func TestHTTPS(t *testing.T) {
 		},
 		{
 			name: "invalid HTTPS IPv6 hint",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "example.com.",
 				Type: "HTTPS",
 				TTL:  300,
@@ -1070,7 +1070,7 @@ func TestHTTPS(t *testing.T) {
 		},
 		{
 			name: "invalid HTTPS mandatory key",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "example.com.",
 				Type: "HTTPS",
 				TTL:  300,
@@ -1083,7 +1083,7 @@ func TestHTTPS(t *testing.T) {
 		},
 		{
 			name: "empty resource records",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name:            "example.com.",
 				Type:            "HTTPS",
 				TTL:             300,
@@ -1110,13 +1110,13 @@ func TestHTTPS(t *testing.T) {
 func TestNAPTR(t *testing.T) {
 	tests := []struct {
 		name    string
-		rrset   model.ResourceRecordSet
+		rrset   *model.ResourceRecordSet
 		want    []dns.RR
 		wantErr error
 	}{
 		{
 			name: "valid NAPTR record",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "example.com.",
 				Type: "NAPTR",
 				TTL:  300,
@@ -1144,7 +1144,7 @@ func TestNAPTR(t *testing.T) {
 		},
 		{
 			name: "invalid NAPTR field count",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "example.com.",
 				Type: "NAPTR",
 				TTL:  300,
@@ -1157,7 +1157,7 @@ func TestNAPTR(t *testing.T) {
 		},
 		{
 			name: "invalid NAPTR order",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "example.com.",
 				Type: "NAPTR",
 				TTL:  300,
@@ -1170,7 +1170,7 @@ func TestNAPTR(t *testing.T) {
 		},
 		{
 			name: "empty resource records",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name:            "example.com.",
 				Type:            "NAPTR",
 				TTL:             300,
@@ -1197,13 +1197,13 @@ func TestNAPTR(t *testing.T) {
 func TestSSHFP(t *testing.T) {
 	tests := []struct {
 		name    string
-		rrset   model.ResourceRecordSet
+		rrset   *model.ResourceRecordSet
 		want    []dns.RR
 		wantErr error
 	}{
 		{
 			name: "valid SSHFP record",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "example.com.",
 				Type: "SSHFP",
 				TTL:  300,
@@ -1228,7 +1228,7 @@ func TestSSHFP(t *testing.T) {
 		},
 		{
 			name: "invalid SSHFP field count",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "example.com.",
 				Type: "SSHFP",
 				TTL:  300,
@@ -1241,7 +1241,7 @@ func TestSSHFP(t *testing.T) {
 		},
 		{
 			name: "invalid SSHFP algorithm",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "example.com.",
 				Type: "SSHFP",
 				TTL:  300,
@@ -1254,7 +1254,7 @@ func TestSSHFP(t *testing.T) {
 		},
 		{
 			name: "empty resource records",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name:            "example.com.",
 				Type:            "SSHFP",
 				TTL:             300,
@@ -1281,13 +1281,13 @@ func TestSSHFP(t *testing.T) {
 func TestSVCB(t *testing.T) {
 	tests := []struct {
 		name    string
-		rrset   model.ResourceRecordSet
+		rrset   *model.ResourceRecordSet
 		want    []dns.RR
 		wantErr error
 	}{
 		{
 			name: "valid SVCB record with all key values",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "example.com.",
 				Type: "SVCB",
 				TTL:  300,
@@ -1342,7 +1342,7 @@ func TestSVCB(t *testing.T) {
 		},
 		{
 			name: "valid SVCB record with minimal key values",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "example.com.",
 				Type: "SVCB",
 				TTL:  300,
@@ -1371,7 +1371,7 @@ func TestSVCB(t *testing.T) {
 		},
 		{
 			name: "invalid SVCB field count",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "example.com.",
 				Type: "SVCB",
 				TTL:  300,
@@ -1384,7 +1384,7 @@ func TestSVCB(t *testing.T) {
 		},
 		{
 			name: "invalid SVCB priority",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "example.com.",
 				Type: "SVCB",
 				TTL:  300,
@@ -1397,7 +1397,7 @@ func TestSVCB(t *testing.T) {
 		},
 		{
 			name: "invalid SVCB port",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "example.com.",
 				Type: "SVCB",
 				TTL:  300,
@@ -1410,7 +1410,7 @@ func TestSVCB(t *testing.T) {
 		},
 		{
 			name: "invalid SVCB IPv4 hint",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "example.com.",
 				Type: "SVCB",
 				TTL:  300,
@@ -1423,7 +1423,7 @@ func TestSVCB(t *testing.T) {
 		},
 		{
 			name: "invalid SVCB IPv6 hint",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "example.com.",
 				Type: "SVCB",
 				TTL:  300,
@@ -1436,7 +1436,7 @@ func TestSVCB(t *testing.T) {
 		},
 		{
 			name: "invalid SVCB mandatory key",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "example.com.",
 				Type: "SVCB",
 				TTL:  300,
@@ -1449,7 +1449,7 @@ func TestSVCB(t *testing.T) {
 		},
 		{
 			name: "empty resource records",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name:            "example.com.",
 				Type:            "SVCB",
 				TTL:             300,
@@ -1476,13 +1476,13 @@ func TestSVCB(t *testing.T) {
 func TestTLSA(t *testing.T) {
 	tests := []struct {
 		name    string
-		rrset   model.ResourceRecordSet
+		rrset   *model.ResourceRecordSet
 		want    []dns.RR
 		wantErr error
 	}{
 		{
 			name: "valid TLSA record",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "example.com.",
 				Type: "TLSA",
 				TTL:  300,
@@ -1508,7 +1508,7 @@ func TestTLSA(t *testing.T) {
 		},
 		{
 			name: "invalid TLSA field count",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "example.com.",
 				Type: "TLSA",
 				TTL:  300,
@@ -1521,7 +1521,7 @@ func TestTLSA(t *testing.T) {
 		},
 		{
 			name: "invalid TLSA usage",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name: "example.com.",
 				Type: "TLSA",
 				TTL:  300,
@@ -1534,7 +1534,7 @@ func TestTLSA(t *testing.T) {
 		},
 		{
 			name: "empty resource records",
-			rrset: model.ResourceRecordSet{
+			rrset: &model.ResourceRecordSet{
 				Name:            "example.com.",
 				Type:            "TLSA",
 				TTL:             300,

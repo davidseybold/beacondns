@@ -2,6 +2,7 @@ package model
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -121,5 +122,48 @@ func NewNS(zoneName string, ttl uint32, nameServerNames []string) ResourceRecord
 		Type:            RRTypeNS,
 		TTL:             ttl,
 		ResourceRecords: resourceRecords,
+	}
+}
+
+type ChangeStatus string
+
+const (
+	ChangeStatusPending ChangeStatus = "PENDING"
+	ChangeStatusDone    ChangeStatus = "DONE"
+)
+
+type ChangeActionType string
+
+const (
+	ChangeActionTypeUpsert ChangeActionType = "UPSERT"
+	ChangeActionTypeDelete ChangeActionType = "DELETE"
+)
+
+type Change struct {
+	ID          uuid.UUID      `json:"id"`
+	ZoneID      uuid.UUID      `json:"zoneID"`
+	Actions     []ChangeAction `json:"actions"`
+	Status      ChangeStatus   `json:"status"`
+	SubmittedAt *time.Time     `json:"submittedAt,omitempty"`
+}
+
+func NewChange(zoneID uuid.UUID, status ChangeStatus, actions []ChangeAction) Change {
+	return Change{
+		ID:      uuid.New(),
+		ZoneID:  zoneID,
+		Status:  status,
+		Actions: actions,
+	}
+}
+
+type ChangeAction struct {
+	ActionType        ChangeActionType   `json:"actionType"`
+	ResourceRecordSet *ResourceRecordSet `json:"resourceRecordSet"`
+}
+
+func NewChangeAction(actionType ChangeActionType, resourceRecordSet *ResourceRecordSet) ChangeAction {
+	return ChangeAction{
+		ActionType:        actionType,
+		ResourceRecordSet: resourceRecordSet,
 	}
 }

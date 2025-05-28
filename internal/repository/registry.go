@@ -14,8 +14,8 @@ import (
 
 type Registry interface {
 	GetZoneRepository() ZoneRepository
-	GetChangeRepository() ChangeRepository
 	GetResponsePolicyRepository() ResponsePolicyRepository
+	GetEventRepository() EventRepository
 }
 
 type Transactor interface {
@@ -47,14 +47,14 @@ func (r *PostgresRepositoryRegistry) GetZoneRepository() ZoneRepository {
 	return &PostgresZoneRepository{db}
 }
 
-func (r *PostgresRepositoryRegistry) GetChangeRepository() ChangeRepository {
-	db := r.getQueryer()
-	return &PostgresChangeRepository{db}
-}
-
 func (r *PostgresRepositoryRegistry) GetResponsePolicyRepository() ResponsePolicyRepository {
 	db := r.getQueryer()
 	return &PostgresResponsePolicyRepository{db}
+}
+
+func (r *PostgresRepositoryRegistry) GetEventRepository() EventRepository {
+	db := r.getQueryer()
+	return &PostgresEventRepository{db}
 }
 
 func (r *PostgresRepositoryRegistry) getQueryer() postgres.Queryer {

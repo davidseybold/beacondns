@@ -7,15 +7,16 @@ import (
 type ErrorCode string
 
 const (
-	ErrorCodeZoneAlreadyExists           ErrorCode = "ZoneAlreadyExists"
-	ErrorCodeNoSuchZone                  ErrorCode = "NoSuchZone"
-	ErrorCodeResponsePolicyAlreadyExists ErrorCode = "ResponsePolicyAlreadyExists"
-	ErrorCodeNoSuchResponsePolicy        ErrorCode = "NoSuchResponsePolicy"
-	ErrorCodeNoSuchResponsePolicyRule    ErrorCode = "NoSuchResponsePolicyRule"
-	ErrorCodeNoSuchChange                ErrorCode = "NoSuchChange"
-	ErrorCodeNoSuchResourceRecordSet     ErrorCode = "NoSuchResourceRecordSet"
-	ErrorCodeInvalidArgument             ErrorCode = "InvalidArgument"
-	ErrorCodeInternalError               ErrorCode = "InternalError"
+	ErrorCodeZoneAlreadyExists               ErrorCode = "ZoneAlreadyExists"
+	ErrorCodeNoSuchZone                      ErrorCode = "NoSuchZone"
+	ErrorCodeResponsePolicyAlreadyExists     ErrorCode = "ResponsePolicyAlreadyExists"
+	ErrorCodeResponsePolicyRuleAlreadyExists ErrorCode = "ResponsePolicyRuleAlreadyExists"
+	ErrorCodeNoSuchResponsePolicy            ErrorCode = "NoSuchResponsePolicy"
+	ErrorCodeNoSuchResponsePolicyRule        ErrorCode = "NoSuchResponsePolicyRule"
+	ErrorCodeNoSuchChange                    ErrorCode = "NoSuchChange"
+	ErrorCodeNoSuchResourceRecordSet         ErrorCode = "NoSuchResourceRecordSet"
+	ErrorCodeInvalidArgument                 ErrorCode = "InvalidArgument"
+	ErrorCodeInternalError                   ErrorCode = "InternalError"
 )
 
 func (e ErrorCode) String() string {
@@ -195,6 +196,20 @@ type ResponsePolicyAlreadyExistsError struct {
 
 func (e *ResponsePolicyAlreadyExistsError) Unwrap() error {
 	return e.ConflictError
+}
+
+type ResponsePolicyRuleAlreadyExistsError struct {
+	*ConflictError
+}
+
+func (e *ResponsePolicyRuleAlreadyExistsError) Unwrap() error {
+	return e.ConflictError
+}
+
+func ErrResponsePolicyRuleAlreadyExists(message string) *ResponsePolicyRuleAlreadyExistsError {
+	return &ResponsePolicyRuleAlreadyExistsError{
+		ConflictError: newConflictError(ErrorCodeResponsePolicyRuleAlreadyExists, message),
+	}
 }
 
 func ErrResponsePolicyAlreadyExists(message string) *ResponsePolicyAlreadyExistsError {

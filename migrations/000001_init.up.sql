@@ -25,9 +25,18 @@ CREATE TABLE
 CREATE TABLE
     changes (
         id UUID PRIMARY KEY,
-        type TEXT NOT NULL CHECK (type IN ('ZONE')),
-        data JSONB NOT NULL,
+        zone_id UUID NOT NULL,
+        actions JSONB NOT NULL,
         status TEXT NOT NULL CHECK (status IN ('PENDING', 'DONE')),
         submitted_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (zone_id) REFERENCES zones (id) ON DELETE CASCADE
+    );
+
+CREATE TABLE
+    events (
+        id UUID PRIMARY KEY,
+        type TEXT NOT NULL,
+        payload JSONB NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
         lock_expires TIMESTAMPTZ
     );
