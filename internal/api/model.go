@@ -52,7 +52,7 @@ type ResponsePolicyRule struct {
 	TriggerType  string              `json:"triggerType"`
 	TriggerValue string              `json:"triggerValue"`
 	ActionType   string              `json:"actionType"`
-	LocalData    []ResourceRecordSet `json:"localData"`
+	LocalData    []ResourceRecordSet `json:"localData,omitempty"`
 }
 
 type CreateResponsePolicyRequest struct {
@@ -105,10 +105,10 @@ type UpdateResponsePolicyResponse struct {
 
 type UpdateResponsePolicyRuleRequest struct {
 	Name         string              `json:"name"`
-	TriggerType  string              `json:"triggerType"`
-	TriggerValue string              `json:"triggerValue"`
-	ActionType   string              `json:"actionType"`
-	LocalData    []ResourceRecordSet `json:"localData"`
+	TriggerType  string              `json:"triggerType"  binding:"required,responsePolicyRuleTriggerType"`
+	TriggerValue string              `json:"triggerValue" binding:"required"`
+	ActionType   string              `json:"actionType"   binding:"required,responsePolicyRuleActionType"`
+	LocalData    []ResourceRecordSet `json:"localData"    binding:"responsePolicyRuleLocalData"`
 }
 
 type UpdateResponsePolicyRuleResponse struct {

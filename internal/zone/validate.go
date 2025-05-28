@@ -10,6 +10,22 @@ import (
 	"github.com/davidseybold/beacondns/internal/model"
 )
 
+// Sentinel errors for validation failures
+var (
+	ErrCNAMESelfReference = errors.New("CNAME record cannot point to itself")
+	ErrCNAMEConflict      = errors.New("cannot add CNAME record: record of different type already exists")
+	ErrSOADeletion        = errors.New("cannot delete SOA record: it is required for zone")
+	ErrSOAExists          = errors.New("cannot add SOA record: zone already has an SOA record")
+	ErrSOAMultipleRecords = errors.New("SOA record can only have one resource record")
+	ErrNSDeletion         = errors.New("cannot delete all NS records: at least one NS record is required")
+	ErrNSRequired         = errors.New("zone must have at least one NS record")
+	ErrInvalidApexRecord  = errors.New("invalid apex record type: only SOA, NS, and A records are allowed at zone apex")
+	ErrUnsupportedRRType  = errors.New("invalid record type: not supported")
+	ErrInvalidRecordValue = errors.New("invalid record value")
+	ErrOutsideZone        = errors.New("invalid domain name: not within zone")
+	ErrInvalidWildcard    = errors.New("invalid wildcard record: wildcard must be at the leftmost label")
+)
+
 type rule func(zone *model.Zone, changes []model.ChangeAction) error
 
 var rules = []rule{
@@ -18,7 +34,6 @@ var rules = []rule{
 	soaRule,
 	nsRule,
 	apexRecordRule,
-	ttlRule,
 	recordValueRule,
 	domainNameRule,
 }
@@ -44,7 +59,7 @@ func cnameRule(zone *model.Zone, changes []model.ChangeAction) error {
 
 		for _, rr := range change.ResourceRecordSet.ResourceRecords {
 			if rr.Value == change.ResourceRecordSet.Name {
-				return fmt.Errorf("CNAME record cannot point to itself: %s", change.ResourceRecordSet.Name)
+				return fmt.Errorf("%w: %s", ErrCNAMESelfReference, change.ResourceRecordSet.Name)
 			}
 		}
 	}
@@ -55,7 +70,7 @@ func cnameRule(zone *model.Zone, changes []model.ChangeAction) error {
 
 	for _, rrset := range zone.ResourceRecordSets {
 		if _, ok := cnameChangeNames[rrset.Name]; ok && rrset.Type != model.RRTypeCNAME {
-			return fmt.Errorf("cannot add CNAME record at %s: record of type %s already exists", rrset.Name, rrset.Type)
+			return fmt.Errorf("%w at %s: record of type %s already exists", ErrCNAMEConflict, rrset.Name, rrset.Type)
 		}
 	}
 
@@ -63,10 +78,10 @@ func cnameRule(zone *model.Zone, changes []model.ChangeAction) error {
 }
 
 func soaRule(zone *model.Zone, changes []model.ChangeAction) error {
-	hasSOA := false
+	zoneHasSOA := false
 	for _, rrset := range zone.ResourceRecordSets {
 		if rrset.Type == model.RRTypeSOA {
-			hasSOA = true
+			zoneHasSOA = true
 			break
 		}
 	}
@@ -77,14 +92,14 @@ func soaRule(zone *model.Zone, changes []model.ChangeAction) error {
 		}
 
 		if change.ActionType == model.ChangeActionTypeDelete {
-			return fmt.Errorf("cannot delete SOA record: it is required for zone %s", zone.Name)
+			return fmt.Errorf("%w %s", ErrSOADeletion, zone.Name)
 		}
 
-		if hasSOA {
-			return fmt.Errorf("cannot add SOA record: zone %s already has an SOA record", zone.Name)
+		if zoneHasSOA {
+			return fmt.Errorf("%w %s", ErrSOAExists, zone.Name)
 		}
 		if len(change.ResourceRecordSet.ResourceRecords) > 1 {
-			return errors.New("SOA record can only have one resource record")
+			return ErrSOAMultipleRecords
 		}
 	}
 
@@ -108,7 +123,7 @@ func nsRule(zone *model.Zone, changes []model.ChangeAction) error {
 	}
 
 	if hasNS && nsDeletions == len(zone.ResourceRecordSets) {
-		return fmt.Errorf("cannot delete all NS records: at least one NS record is required for zone %s", zone.Name)
+		return fmt.Errorf("%w %s", ErrNSDeletion, zone.Name)
 	}
 
 	if !hasNS {
@@ -120,7 +135,7 @@ func nsRule(zone *model.Zone, changes []model.ChangeAction) error {
 			}
 		}
 		if !addingNS {
-			return fmt.Errorf("zone %s must have at least one NS record", zone.Name)
+			return fmt.Errorf("%w %s", ErrNSRequired, zone.Name)
 		}
 	}
 
@@ -131,12 +146,11 @@ func apexRecordRule(zone *model.Zone, changes []model.ChangeAction) error {
 	apexName := dns.Fqdn(zone.Name)
 
 	for _, change := range changes {
-		if change.ResourceRecordSet.Name == apexName {
+		if dns.Fqdn(change.ResourceRecordSet.Name) == apexName {
 			if change.ResourceRecordSet.Type != model.RRTypeSOA &&
 				change.ResourceRecordSet.Type != model.RRTypeNS &&
 				change.ResourceRecordSet.Type != model.RRTypeA {
-				return fmt.Errorf("invalid apex record type %s: only SOA, NS, and A records are allowed at zone apex",
-					change.ResourceRecordSet.Type)
+				return fmt.Errorf("%w: %s", ErrInvalidApexRecord, change.ResourceRecordSet.Type)
 			}
 		}
 	}
@@ -147,7 +161,8 @@ func apexRecordRule(zone *model.Zone, changes []model.ChangeAction) error {
 func supportedRRTypeRule(_ *model.Zone, changes []model.ChangeAction) error {
 	for _, change := range changes {
 		if _, ok := model.SupportedRRTypes[change.ResourceRecordSet.Type]; !ok {
-			return fmt.Errorf("invalid record type %s: only supported types are %v",
+			return fmt.Errorf("%w: %s (supported types are %v)",
+				ErrUnsupportedRRType,
 				change.ResourceRecordSet.Type,
 				model.SupportedRRTypes,
 			)
@@ -157,55 +172,29 @@ func supportedRRTypeRule(_ *model.Zone, changes []model.ChangeAction) error {
 	return nil
 }
 
-// ttlRule ensures TTL values are within valid range.
-func ttlRule(_ *model.Zone, changes []model.ChangeAction) error {
-	const (
-		minTTL = 0
-		maxTTL = 2147483647 // 2^31 - 1
-	)
-
-	for _, change := range changes {
-		if change.ResourceRecordSet.TTL < minTTL || change.ResourceRecordSet.TTL > maxTTL {
-			return fmt.Errorf("invalid TTL value %d: must be between %d and %d",
-				change.ResourceRecordSet.TTL, minTTL, maxTTL)
-		}
-	}
-	return nil
-}
-
 func recordValueRule(_ *model.Zone, changes []model.ChangeAction) error {
 	for _, change := range changes {
 		_, err := ParseRRs(change.ResourceRecordSet)
 		if err != nil {
-			return fmt.Errorf("invalid record value: %w", err)
+			return fmt.Errorf("%w: %w", ErrInvalidRecordValue, err)
 		}
 	}
 	return nil
 }
 
-// domainNameRule ensures domain names are valid.
 func domainNameRule(zone *model.Zone, changes []model.ChangeAction) error {
 	for _, change := range changes {
-		// Check if the record name is a valid domain name
-		if !dns.IsFqdn(change.ResourceRecordSet.Name) {
-			return fmt.Errorf(
-				"invalid domain name: %s is not a fully qualified domain name",
-				change.ResourceRecordSet.Name,
-			)
-		}
-
 		// Check if the record name is within the zone.
-		if !strings.HasSuffix(change.ResourceRecordSet.Name, dns.Fqdn(zone.Name)) {
-			return fmt.Errorf("invalid domain name: %s is not within zone %s", change.ResourceRecordSet.Name, zone.Name)
+		if !dns.IsSubDomain(dns.Fqdn(zone.Name), dns.Fqdn(change.ResourceRecordSet.Name)) {
+			return fmt.Errorf("%w: %s is not within zone %s", ErrOutsideZone, change.ResourceRecordSet.Name, zone.Name)
 		}
 
 		// Check for wildcard records.
-		if strings.Contains(change.ResourceRecordSet.Name, "*") {
-			if !strings.HasPrefix(change.ResourceRecordSet.Name, "*. ") {
-				return fmt.Errorf(
-					"invalid wildcard record: %s (wildcard must be at the leftmost label)",
-					change.ResourceRecordSet.Name,
-				)
+		numAsterisks := strings.Count(change.ResourceRecordSet.Name, "*")
+		if numAsterisks > 0 {
+			labels := dns.SplitDomainName(change.ResourceRecordSet.Name)
+			if labels[0] != "*" || numAsterisks > 1 {
+				return fmt.Errorf("%w: %s", ErrInvalidWildcard, change.ResourceRecordSet.Name)
 			}
 		}
 	}

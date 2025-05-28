@@ -48,70 +48,70 @@ func NewDeleteResponsePolicyEvent(responsePolicy *model.ResponsePolicy) *model.E
 }
 
 type EnableResponsePolicyEvent struct {
-	ResponsePolicyID      uuid.UUID   `json:"responsePolicyId"`
-	ResponsePolicyRuleIDs []uuid.UUID `json:"responsePolicyRuleIds"`
+	ResponsePolicy        *model.ResponsePolicy `json:"responsePolicy"`
+	ResponsePolicyRuleIDs []uuid.UUID           `json:"responsePolicyRuleIds"`
 }
 
-func NewEnableResponsePolicyEvent(responsePolicyID uuid.UUID, responsePolicyRuleIDs []uuid.UUID) *model.Event {
+func NewEnableResponsePolicyEvent(responsePolicy *model.ResponsePolicy, responsePolicyRuleIDs []uuid.UUID) *model.Event {
 	return model.NewEvent(EventTypeEnableResponsePolicy, &EnableResponsePolicyEvent{
-		ResponsePolicyID:      responsePolicyID,
+		ResponsePolicy:        responsePolicy,
 		ResponsePolicyRuleIDs: responsePolicyRuleIDs,
 	})
 }
 
 type DisableResponsePolicyEvent struct {
-	ResponsePolicyID      uuid.UUID   `json:"responsePolicyId"`
-	ResponsePolicyRuleIDs []uuid.UUID `json:"responsePolicyRuleIds"`
+	ResponsePolicy        *model.ResponsePolicy `json:"responsePolicy"`
+	ResponsePolicyRuleIDs []uuid.UUID           `json:"responsePolicyRuleIds"`
 }
 
-func NewDisableResponsePolicyEvent(responsePolicyID uuid.UUID, responsePolicyRuleIDs []uuid.UUID) *model.Event {
+func NewDisableResponsePolicyEvent(responsePolicy *model.ResponsePolicy, responsePolicyRuleIDs []uuid.UUID) *model.Event {
 	return model.NewEvent(EventTypeDisableResponsePolicy, &DisableResponsePolicyEvent{
-		ResponsePolicyID:      responsePolicyID,
+		ResponsePolicy:        responsePolicy,
 		ResponsePolicyRuleIDs: responsePolicyRuleIDs,
 	})
 }
 
 type CreateResponsePolicyRuleEvent struct {
-	ResponsePolicyID   uuid.UUID                 `json:"responsePolicyId"`
+	ResponsePolicy     *model.ResponsePolicy     `json:"responsePolicy"`
 	ResponsePolicyRule *model.ResponsePolicyRule `json:"responsePolicyRule"`
 }
 
 func NewCreateResponsePolicyRuleEvent(
-	responsePolicyID uuid.UUID,
+	responsePolicy *model.ResponsePolicy,
 	responsePolicyRule *model.ResponsePolicyRule,
 ) *model.Event {
 	return model.NewEvent(EventTypeCreateResponsePolicyRule, &CreateResponsePolicyRuleEvent{
-		ResponsePolicyID:   responsePolicyID,
+		ResponsePolicy:     responsePolicy,
 		ResponsePolicyRule: responsePolicyRule,
 	})
 }
 
 type DeleteResponsePolicyRuleEvent struct {
-	ResponsePolicyID   uuid.UUID                 `json:"responsePolicyId"`
+	ResponsePolicy     *model.ResponsePolicy     `json:"responsePolicy"`
 	ResponsePolicyRule *model.ResponsePolicyRule `json:"responsePolicyRule"`
 }
 
 func NewDeleteResponsePolicyRuleEvent(
-	responsePolicyID uuid.UUID,
+	responsePolicy *model.ResponsePolicy,
 	responsePolicyRule *model.ResponsePolicyRule,
 ) *model.Event {
 	return model.NewEvent(EventTypeDeleteResponsePolicyRule, &DeleteResponsePolicyRuleEvent{
-		ResponsePolicyID:   responsePolicyID,
+		ResponsePolicy:     responsePolicy,
 		ResponsePolicyRule: responsePolicyRule,
 	})
 }
 
 type UpdateResponsePolicyRuleEvent struct {
-	ResponsePolicyID   uuid.UUID                 `json:"responsePolicyId"`
+	ResponsePolicy     *model.ResponsePolicy     `json:"responsePolicy"`
 	ResponsePolicyRule *model.ResponsePolicyRule `json:"responsePolicyRule"`
 }
 
 func NewUpdateResponsePolicyRuleEvent(
-	responsePolicyID uuid.UUID,
+	responsePolicy *model.ResponsePolicy,
 	responsePolicyRule *model.ResponsePolicyRule,
 ) *model.Event {
 	return model.NewEvent(EventTypeUpdateResponsePolicyRule, &UpdateResponsePolicyRuleEvent{
-		ResponsePolicyID:   responsePolicyID,
+		ResponsePolicy:     responsePolicy,
 		ResponsePolicyRule: responsePolicyRule,
 	})
 }

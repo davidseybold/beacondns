@@ -72,6 +72,7 @@ func convertAPIResourceRecordSetsToModel(records []ResourceRecordSet) []model.Re
 
 func convertModelResponsePolicyRuleToAPI(rule *model.ResponsePolicyRule) *ResponsePolicyRule {
 	return &ResponsePolicyRule{
+		ID:           rule.ID.String(),
 		Name:         rule.Name,
 		TriggerType:  string(rule.TriggerType),
 		TriggerValue: rule.TriggerValue,

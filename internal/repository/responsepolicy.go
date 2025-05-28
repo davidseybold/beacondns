@@ -72,6 +72,12 @@ const (
 		WHERE id = $1
 		RETURNING id, name, description, priority, enabled
 	`
+
+	getResponsePolicies = `
+		SELECT id, name, trigger_type, trigger_value, action_type, local_data
+		FROM response_policy_rules
+		WHERE response_policy_id = $1 AND id = ANY($2)
+	`
 )
 
 type ResponsePolicyRepository interface {
@@ -95,6 +101,7 @@ type ResponsePolicyRepository interface {
 	) (*model.ResponsePolicyRule, error)
 	DeleteResponsePolicyRule(ctx context.Context, policyID uuid.UUID, id uuid.UUID) error
 	ListResponsePolicyRules(ctx context.Context, policyID uuid.UUID) ([]model.ResponsePolicyRule, error)
+	GetResponsePolicies(ctx context.Context, policyID uuid.UUID, ruleIDs []uuid.UUID) ([]model.ResponsePolicyRule, error)
 }
 
 var _ ResponsePolicyRepository = (*PostgresResponsePolicyRepository)(nil)
@@ -326,4 +333,27 @@ func (p *PostgresResponsePolicyRepository) UpdateResponsePolicyRule(
 	}
 
 	return rule, nil
+}
+
+func (p *PostgresResponsePolicyRepository) GetResponsePolicies(
+	ctx context.Context,
+	policyID uuid.UUID,
+	ruleIDs []uuid.UUID,
+) ([]model.ResponsePolicyRule, error) {
+	rows, err := p.db.Query(ctx, getResponsePolicies, policyID, ruleIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query response policies: %w", err)
+	}
+	defer rows.Close()
+
+	var policies []model.ResponsePolicyRule
+	for rows.Next() {
+		var policy model.ResponsePolicyRule
+		if err = rows.Scan(&policy.ID, &policy.Name, &policy.TriggerType, &policy.TriggerValue, &policy.ActionType, &policy.LocalData); err != nil {
+			return nil, fmt.Errorf("failed to scan response policy rule row: %w", err)
+		}
+		policies = append(policies, policy)
+	}
+
+	return policies, nil
 }

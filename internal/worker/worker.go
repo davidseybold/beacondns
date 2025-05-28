@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/davidseybold/beacondns/internal/beaconerr"
 	"github.com/davidseybold/beacondns/internal/log"
 	"github.com/davidseybold/beacondns/internal/model"
 	"github.com/davidseybold/beacondns/internal/repository"
@@ -68,7 +67,7 @@ func (w *Worker) processEvents(ctx context.Context) error {
 	err := w.registry.InTx(ctx, func(ctx context.Context, r repository.Registry) error {
 		event, err := r.GetEventRepository().GetEventWithLock(ctx)
 		if err != nil {
-			if beaconerr.IsNoSuchError(err) {
+			if errors.Is(err, repository.ErrEntityNotFound) {
 				return nil
 			}
 			return err

@@ -57,12 +57,13 @@ func NewHTTPHandler(
 		g.POST("", handler.CreateResponsePolicy)
 		g.GET("", handler.ListResponsePolicies)
 		g.GET("/:policyID", handler.GetResponsePolicy)
-		g.PUT("/:policyID", handler.UpdateResponsePolicy)
+		g.POST("/:policyID", handler.UpdateResponsePolicy)
 		g.DELETE("/:policyID", handler.DeleteResponsePolicy)
+		g.POST("/:policyID/toggle", handler.ToggleResponsePolicy)
 		g.POST("/:policyID/rules", handler.CreateResponsePolicyRule)
 		g.GET("/:policyID/rules", handler.ListResponsePolicyRules)
 		g.GET("/:policyID/rules/:ruleID", handler.GetResponsePolicyRule)
-		g.PUT("/:policyID/rules/:ruleID", handler.UpdateResponsePolicyRule)
+		g.POST("/:policyID/rules/:ruleID", handler.UpdateResponsePolicyRule)
 		g.DELETE("/:policyID/rules/:ruleID", handler.DeleteResponsePolicyRule)
 	}
 

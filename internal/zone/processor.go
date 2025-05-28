@@ -7,7 +7,6 @@ import (
 	"log/slog"
 
 	"github.com/davidseybold/beacondns/internal/dnsstore"
-	"github.com/davidseybold/beacondns/internal/log"
 	"github.com/davidseybold/beacondns/internal/model"
 	"github.com/davidseybold/beacondns/internal/repository"
 )
@@ -24,16 +23,33 @@ type EventProcessorDeps struct {
 	Logger     *slog.Logger
 }
 
-func NewEventProcessor(deps *EventProcessorDeps) *EventProcessor {
-	if deps.Logger == nil {
-		deps.Logger = log.NewDiscardLogger()
+func (d *EventProcessorDeps) Validate() error {
+
+	if d.Repository == nil {
+		return fmt.Errorf("repository is required")
+	}
+
+	if d.DNSStore == nil {
+		return fmt.Errorf("dns store is required")
+	}
+
+	if d.Logger == nil {
+		return fmt.Errorf("logger is required")
+	}
+
+	return nil
+}
+
+func NewEventProcessor(deps *EventProcessorDeps) (*EventProcessor, error) {
+	if err := deps.Validate(); err != nil {
+		return nil, err
 	}
 
 	return &EventProcessor{
 		repository: deps.Repository,
 		store:      deps.DNSStore,
 		logger:     deps.Logger,
-	}
+	}, nil
 }
 
 func (p *EventProcessor) Events() []string {

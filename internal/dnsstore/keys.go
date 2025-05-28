@@ -2,6 +2,8 @@ package dnsstore
 
 import (
 	"fmt"
+
+	"github.com/google/uuid"
 )
 
 const (
@@ -22,5 +24,9 @@ func createZoneRecordSetPrefix(zoneName string) string {
 }
 
 func createResponsePolicyRuleKey(rule *ResponsePolicyRule) string {
-	return fmt.Sprintf("%s/%s/rule/%s", keyPrefixResponsePolicy, rule.Meta.PolicyName, rule.ID)
+	return fmt.Sprintf("%s/%s/rule/%s", keyPrefixResponsePolicy, rule.Meta.PolicyID, rule.ID)
+}
+
+func createResponsePolicyRulePrefix(policyID uuid.UUID) string {
+	return fmt.Sprintf("%s/%s/rule", keyPrefixResponsePolicy, policyID)
 }

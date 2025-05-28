@@ -16,8 +16,7 @@ var (
 )
 
 type ResponsePolicyRuleMeta struct {
-	PolicyID   uuid.UUID `msg:"policyId"`
-	PolicyName string    `msg:"policyName"`
+	PolicyID uuid.UUID `msg:"policyId"`
 }
 
 type ResponsePolicyRule struct {
@@ -38,6 +37,9 @@ type ResponsePolicyStore interface {
 
 type ResponsePolicyWriter interface {
 	PutResponsePolicyRule(ctx context.Context, rule *ResponsePolicyRule) error
+	PutResponsePolicyRules(ctx context.Context, rules []ResponsePolicyRule) error
+	DeleteResponsePolicyRule(ctx context.Context, rule *ResponsePolicyRule) error
+	DeleteResponsePolicyRulesForPolicy(ctx context.Context, policyID uuid.UUID) error
 }
 
 type ResponsePolicyReader interface {
@@ -270,6 +272,22 @@ func (s *Store) PutResponsePolicyRule(ctx context.Context, rule *ResponsePolicyR
 	return s.kvstore.Put(ctx, key, val)
 }
 
+func (s *Store) PutResponsePolicyRules(ctx context.Context, rules []ResponsePolicyRule) error {
+	tx := s.kvstore.Txn(ctx)
+
+	for _, rule := range rules {
+		key := createResponsePolicyRuleKey(&rule)
+		val, err := marshalResponsePolicyRule(&rule)
+		if err != nil {
+			return err
+		}
+
+		tx.Put(key, val)
+	}
+
+	return tx.Commit()
+}
+
 func (s *Store) GetAllResponsePolicyRules(ctx context.Context) ([]ResponsePolicyRule, error) {
 	items, err := s.kvstore.Get(ctx, keyPrefixResponsePolicy, kvstore.WithPrefix())
 	if err != nil {
@@ -291,6 +309,11 @@ func (s *Store) GetAllResponsePolicyRules(ctx context.Context) ([]ResponsePolicy
 func (s *Store) DeleteResponsePolicyRule(ctx context.Context, rule *ResponsePolicyRule) error {
 	key := createResponsePolicyRuleKey(rule)
 	return s.kvstore.Delete(ctx, key)
+}
+
+func (s *Store) DeleteResponsePolicyRulesForPolicy(ctx context.Context, policyID uuid.UUID) error {
+	prefix := createResponsePolicyRulePrefix(policyID)
+	return s.kvstore.Delete(ctx, prefix, kvstore.WithPrefix())
 }
 
 func (s *Store) SubscribeToResponsePolicyRuleEvents(ctx context.Context) (<-chan ResponsePolicyRuleEvent, error) {

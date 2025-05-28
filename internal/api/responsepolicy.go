@@ -249,3 +249,25 @@ func (h *handler) DeleteResponsePolicyRule(c *gin.Context) {
 
 	c.JSON(http.StatusNoContent, nil)
 }
+
+func (h *handler) ToggleResponsePolicy(c *gin.Context) {
+	policyID, err := getUUIDParam(c, "policyID")
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+
+	var req ToggleResponsePolicyRequest
+	if err = c.ShouldBindJSON(&req); err != nil {
+		h.handleError(c, translateGinBindingError(err))
+		return
+	}
+
+	err = h.responsePolicyService.ToggleResponsePolicy(c.Request.Context(), policyID, req.Enabled)
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusNoContent, nil)
+}

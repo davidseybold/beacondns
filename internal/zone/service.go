@@ -164,7 +164,7 @@ func (d *DefaultService) UpsertResourceRecordSet(
 
 	err = validateChanges(zone, &change)
 	if err != nil {
-		return nil, err
+		return nil, beaconerr.ErrInvalidArgument(err.Error(), "")
 	}
 
 	var newRRSet *model.ResourceRecordSet
@@ -226,6 +226,11 @@ func (d *DefaultService) DeleteResourceRecordSet(
 	changeAction := model.NewChangeAction(model.ChangeActionTypeDelete, nil)
 	change := model.NewChange(zone.ID, model.ChangeStatusPending, []model.ChangeAction{changeAction})
 
+	err = validateChanges(zone, &change)
+	if err != nil {
+		return beaconerr.ErrInvalidArgument(err.Error(), "")
+	}
+
 	changeEvent := NewChangeRRSetEvent(change.ID.String(), change.ID)
 
 	err = d.registry.InTx(ctx, func(ctx context.Context, r repository.Registry) error {
@@ -271,9 +276,20 @@ func (d *DefaultService) ListResourceRecordSets(
 func (d *DefaultService) DeleteZone(ctx context.Context, name string) error {
 	zoneName := dns.Fqdn(name)
 
+	zone, err := d.registry.GetZoneRepository().GetZoneInfo(ctx, zoneName)
+	if err != nil && errors.Is(err, repository.ErrEntityNotFound) {
+		return beaconerr.ErrNoSuchZone("zone not found")
+	} else if err != nil {
+		return beaconerr.ErrInternalError("failed to delete zone", err)
+	}
+
+	if zone.ResourceRecordSetCount > 2 {
+		return beaconerr.ErrHostedZoneNotEmpty("zone is not empty")
+	}
+
 	event := NewDeleteZoneEvent(zoneName)
 
-	err := d.registry.InTx(ctx, func(ctx context.Context, r repository.Registry) error {
+	err = d.registry.InTx(ctx, func(ctx context.Context, r repository.Registry) error {
 		err := r.GetZoneRepository().DeleteZone(ctx, zoneName)
 		if err != nil {
 			return err

@@ -55,6 +55,10 @@ type NoSuchResourceRecordSetError struct {
 	beaconError
 }
 
+type HostedZoneNotEmptyError struct {
+	beaconError
+}
+
 type InvalidArgumentError struct {
 	beaconError
 }
@@ -105,6 +109,10 @@ func parseError(errResponse errorResponse) error {
 		}
 	case beaconerr.ErrorCodeInternalError:
 		return &InternalError{
+			beaconError: bErr,
+		}
+	case beaconerr.ErrorCodeHostedZoneNotEmpty:
+		return &HostedZoneNotEmptyError{
 			beaconError: bErr,
 		}
 	default:

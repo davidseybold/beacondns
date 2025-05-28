@@ -15,6 +15,7 @@ const (
 	ErrorCodeNoSuchResponsePolicyRule        ErrorCode = "NoSuchResponsePolicyRule"
 	ErrorCodeNoSuchChange                    ErrorCode = "NoSuchChange"
 	ErrorCodeNoSuchResourceRecordSet         ErrorCode = "NoSuchResourceRecordSet"
+	ErrorCodeHostedZoneNotEmpty              ErrorCode = "HostedZoneNotEmpty"
 	ErrorCodeInvalidArgument                 ErrorCode = "InvalidArgument"
 	ErrorCodeInternalError                   ErrorCode = "InternalError"
 )
@@ -265,6 +266,20 @@ func ErrInvalidArgument(message string, argument string) *InvalidArgumentError {
 	return &InvalidArgumentError{
 		BadRequestError: newBadRequestError(ErrorCodeInvalidArgument, message, nil),
 		Argument:        argument,
+	}
+}
+
+type HostedZoneNotEmptyError struct {
+	*BadRequestError
+}
+
+func (e *HostedZoneNotEmptyError) Unwrap() error {
+	return e.BadRequestError
+}
+
+func ErrHostedZoneNotEmpty(message string) *HostedZoneNotEmptyError {
+	return &HostedZoneNotEmptyError{
+		BadRequestError: newBadRequestError(ErrorCodeHostedZoneNotEmpty, message, nil),
 	}
 }
 

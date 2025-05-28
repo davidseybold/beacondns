@@ -93,17 +93,24 @@ func start(ctx context.Context, w io.Writer) error {
 	dnsStore := dnsstore.New(kvstore)
 
 	zoneService := zone.NewService(repoRegistry)
-	zoneEventProcessor := zone.NewEventProcessor(&zone.EventProcessorDeps{
+	zoneEventProcessor, err := zone.NewEventProcessor(&zone.EventProcessorDeps{
 		Repository: repoRegistry,
 		DNSStore:   dnsStore,
 		Logger:     logger,
 	})
+	if err != nil {
+		return fmt.Errorf("error creating zone event processor: %w", err)
+	}
 
 	responsePolicyService := responsepolicy.NewService(repoRegistry)
-	responsePolicyEventProcessor := responsepolicy.NewEventProcessor(&responsepolicy.EventProcessorDeps{
+	responsePolicyEventProcessor, err := responsepolicy.NewEventProcessor(&responsepolicy.EventProcessorDeps{
 		Repository: repoRegistry,
 		Logger:     logger,
+		DNSStore:   dnsStore,
 	})
+	if err != nil {
+		return fmt.Errorf("error creating response policy event processor: %w", err)
+	}
 
 	workerCtx, workerCancel := context.WithCancel(ctx)
 	defer workerCancel()

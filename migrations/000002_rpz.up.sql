@@ -12,7 +12,7 @@ CREATE TABLE
 CREATE TABLE
     response_policy_rules (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
-        response_policy_id UUID NOT NULL REFERENCES response_policies (id),
+        response_policy_id UUID NOT NULL,
         name TEXT NOT NULL,
         trigger_type TEXT NOT NULL CHECK (
             trigger_type IN ('QNAME', 'IP', 'CLIENT_IP', 'NSDNAME', 'NSIP')
@@ -23,5 +23,7 @@ CREATE TABLE
         ),
         local_data JSONB,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now (),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT now ()
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT now (),
+        UNIQUE (response_policy_id, trigger_type, trigger_value),
+        FOREIGN KEY (response_policy_id) REFERENCES response_policies (id) ON DELETE CASCADE
     );

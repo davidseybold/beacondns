@@ -23,15 +23,20 @@ func responsePolicyRuleActionTypeValidator(fl validator.FieldLevel) bool {
 }
 
 func responsePolicyRuleLocalDataValidator(fl validator.FieldLevel) bool {
+
+	actionType := fl.Parent().FieldByName("ActionType").String()
+
+	if actionType != model.ResponsePolicyRuleActionTypeLOCALDATA.String() {
+		return true
+	}
+
 	localData, ok := fl.Field().Interface().([]model.ResourceRecordSet)
 	if !ok {
 		return false
 	}
 
-	actionType := fl.Parent().FieldByName("ActionType").String()
-
-	if actionType == model.ResponsePolicyRuleActionTypeLOCALDATA.String() {
-		return len(localData) > 0
+	if len(localData) == 0 {
+		return false
 	}
 
 	return true

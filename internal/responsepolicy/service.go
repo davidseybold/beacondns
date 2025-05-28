@@ -54,6 +54,8 @@ func (d *DefaultService) CreateResponsePolicy(
 		policy.ID = uuid.New()
 	}
 
+	policy.Enabled = true
+
 	var newPolicy *model.ResponsePolicy
 	err := d.registry.InTx(ctx, func(ctx context.Context, r repository.Registry) error {
 		var err error
@@ -159,7 +161,7 @@ func (d *DefaultService) UpdateResponsePolicy(
 }
 
 func (d *DefaultService) ToggleResponsePolicy(ctx context.Context, id uuid.UUID, enabled bool) error {
-	responsePolicy, err := d.registry.GetResponsePolicyRepository().GetResponsePolicy(ctx, id)
+	policy, err := d.registry.GetResponsePolicyRepository().GetResponsePolicy(ctx, id)
 	if err != nil && errors.Is(err, repository.ErrEntityNotFound) {
 		return beaconerr.ErrNoSuchResponsePolicy("response policy not found")
 	} else if err != nil {
@@ -167,7 +169,7 @@ func (d *DefaultService) ToggleResponsePolicy(ctx context.Context, id uuid.UUID,
 	}
 
 	// If the response policy is already in the desired state, do nothing.
-	if responsePolicy.Enabled == enabled {
+	if policy.Enabled == enabled {
 		return nil
 	}
 
@@ -189,9 +191,9 @@ func (d *DefaultService) ToggleResponsePolicy(ctx context.Context, id uuid.UUID,
 
 		var event *model.Event
 		if enabled {
-			event = NewEnableResponsePolicyEvent(id, responsePolicyRuleIDs)
+			event = NewEnableResponsePolicyEvent(policy, responsePolicyRuleIDs)
 		} else {
-			event = NewDisableResponsePolicyEvent(id, responsePolicyRuleIDs)
+			event = NewDisableResponsePolicyEvent(policy, responsePolicyRuleIDs)
 		}
 
 		err = r.GetEventRepository().CreateEvent(ctx, event)
@@ -212,15 +214,22 @@ func (d *DefaultService) CreateResponsePolicyRule(
 		rule.ID = uuid.New()
 	}
 
+	policy, err := d.registry.GetResponsePolicyRepository().GetResponsePolicy(ctx, policyID)
+	if err != nil && errors.Is(err, repository.ErrEntityNotFound) {
+		return nil, beaconerr.ErrNoSuchResponsePolicy("response policy not found")
+	} else if err != nil {
+		return nil, beaconerr.ErrInternalError("failed to get response policy", err)
+	}
+
 	var newRule *model.ResponsePolicyRule
-	err := d.registry.InTx(ctx, func(ctx context.Context, r repository.Registry) error {
+	err = d.registry.InTx(ctx, func(ctx context.Context, r repository.Registry) error {
 		var err error
 		newRule, err = d.registry.GetResponsePolicyRepository().CreateResponsePolicyRule(ctx, policyID, rule)
 		if err != nil {
 			return err
 		}
 
-		event := NewCreateResponsePolicyRuleEvent(policyID, newRule)
+		event := NewCreateResponsePolicyRuleEvent(policy, newRule)
 
 		err = r.GetEventRepository().CreateEvent(ctx, event)
 		if err != nil {
@@ -242,7 +251,14 @@ func (d *DefaultService) DeleteResponsePolicyRule(ctx context.Context,
 	policyID uuid.UUID,
 	id uuid.UUID,
 ) error {
-	err := d.registry.InTx(ctx, func(ctx context.Context, r repository.Registry) error {
+	policy, err := d.registry.GetResponsePolicyRepository().GetResponsePolicy(ctx, policyID)
+	if err != nil && errors.Is(err, repository.ErrEntityNotFound) {
+		return beaconerr.ErrNoSuchResponsePolicy("response policy not found")
+	} else if err != nil {
+		return beaconerr.ErrInternalError("failed to delete response policy", err)
+	}
+
+	err = d.registry.InTx(ctx, func(ctx context.Context, r repository.Registry) error {
 		rule, err := r.GetResponsePolicyRepository().GetResponsePolicyRule(ctx, policyID, id)
 		if err != nil {
 			return err
@@ -253,7 +269,7 @@ func (d *DefaultService) DeleteResponsePolicyRule(ctx context.Context,
 			return err
 		}
 
-		event := NewDeleteResponsePolicyRuleEvent(policyID, rule)
+		event := NewDeleteResponsePolicyRuleEvent(policy, rule)
 
 		err = r.GetEventRepository().CreateEvent(ctx, event)
 		if err != nil {
@@ -289,6 +305,13 @@ func (d *DefaultService) ListResponsePolicyRules(
 	ctx context.Context,
 	policyID uuid.UUID,
 ) ([]model.ResponsePolicyRule, error) {
+	_, err := d.registry.GetResponsePolicyRepository().GetResponsePolicy(ctx, policyID)
+	if err != nil && errors.Is(err, repository.ErrEntityNotFound) {
+		return nil, beaconerr.ErrNoSuchResponsePolicy("response policy not found")
+	} else if err != nil {
+		return nil, beaconerr.ErrInternalError("failed to list response policy rules", err)
+	}
+
 	rules, err := d.registry.GetResponsePolicyRepository().ListResponsePolicyRules(ctx, policyID)
 	if err != nil {
 		return nil, beaconerr.ErrInternalError("failed to list response policy rules", err)
@@ -302,15 +325,22 @@ func (d *DefaultService) UpdateResponsePolicyRule(
 	policyID uuid.UUID,
 	rule *model.ResponsePolicyRule,
 ) (*model.ResponsePolicyRule, error) {
+	policy, err := d.registry.GetResponsePolicyRepository().GetResponsePolicy(ctx, policyID)
+	if err != nil && errors.Is(err, repository.ErrEntityNotFound) {
+		return nil, beaconerr.ErrNoSuchResponsePolicy("response policy not found")
+	} else if err != nil {
+		return nil, beaconerr.ErrInternalError("failed to get response policy", err)
+	}
+
 	var updatedRule *model.ResponsePolicyRule
-	err := d.registry.InTx(ctx, func(ctx context.Context, r repository.Registry) error {
+	err = d.registry.InTx(ctx, func(ctx context.Context, r repository.Registry) error {
 		var err error
 		updatedRule, err = r.GetResponsePolicyRepository().UpdateResponsePolicyRule(ctx, policyID, rule)
 		if err != nil {
 			return err
 		}
 
-		event := NewUpdateResponsePolicyRuleEvent(policyID, updatedRule)
+		event := NewUpdateResponsePolicyRuleEvent(policy, updatedRule)
 
 		err = r.GetEventRepository().CreateEvent(ctx, event)
 		if err != nil {
