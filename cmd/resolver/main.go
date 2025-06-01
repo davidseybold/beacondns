@@ -17,7 +17,8 @@ import (
 type config struct {
 	EtcdEndpoints []string      `env:"BEACON_ETCD_ENDPOINTS" envSeparator:","`
 	ResolverType  resolver.Type `env:"BEACON_RESOLVER_TYPE"                   envDefault:"forwarder"`
-	Forwarder     string        `env:"BEACON_FORWARDER"`
+	Forwarders    []string      `env:"BEACON_FORWARDER" envSeparator:","`
+	DebugMode     bool          `env:"BEACON_DEBUG_MODE" envDefault:"false"`
 }
 
 func (c *config) Validate() error {
@@ -41,8 +42,9 @@ func start(ctx context.Context, _ io.Writer) error {
 	resolverCtx, cancelResolver := context.WithCancel(ctx)
 	dnsresolver, err := resolver.New(&resolver.Config{
 		Type:          cfg.ResolverType,
-		Forwarder:     &cfg.Forwarder,
+		Forwarders:    cfg.Forwarders,
 		EtcdEndpoints: cfg.EtcdEndpoints,
+		DebugMode:     cfg.DebugMode,
 	})
 	if err != nil {
 		cancelResolver()

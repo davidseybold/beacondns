@@ -10,7 +10,7 @@ services:
       - "53:53/tcp"
     environment:
       - BEACON_ETCD_ENDPOINTS=http://etcd:2379
-      - BEACON_RESOLVER_TYPE=forwarder
+      - BEACON_RESOLVER_TYPE=recursive
       - BEACON_FORWARDER=1.1.1.1
     depends_on:
       - etcd

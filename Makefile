@@ -31,7 +31,7 @@ build-controller:
 
 build-resolver:
 	@echo ">> Building resolver..."
-	$(GO) build -o $(RESOLVER_BIN) $(RESOLVER_DIR)
+	CGO_ENABLED=1 $(GO) build -o $(RESOLVER_BIN) $(RESOLVER_DIR)
 
 # Run Targets
 run-controller: build-controller

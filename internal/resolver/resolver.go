@@ -12,12 +12,14 @@ import (
 
 	"github.com/coredns/coredns/core/dnsserver"
 	_ "github.com/coredns/coredns/plugin/any"     // used for plugin registration.
+	_ "github.com/coredns/coredns/plugin/cache"   // used for plugin registration.
 	_ "github.com/coredns/coredns/plugin/errors"  // used for plugin registration.
 	_ "github.com/coredns/coredns/plugin/forward" // used for plugin registration.
 	_ "github.com/coredns/coredns/plugin/log"     // used for plugin registration.
 
 	_ "github.com/davidseybold/beacondns/internal/resolver/plugin/beaconauth"     // used for plugin registration.
 	_ "github.com/davidseybold/beacondns/internal/resolver/plugin/beaconfirewall" // used for plugin registration.
+	_ "github.com/davidseybold/beacondns/internal/resolver/plugin/unbound"        // used for plugin registration.
 )
 
 //nolint:gochecknoinits // used for plugin registration.
@@ -32,6 +34,7 @@ func init() {
 		"beaconfirewall", // custom plugin
 		"beaconauth",     // custom plugin
 		"forward",
+		"unbound",
 	}
 }
 
@@ -44,13 +47,14 @@ const (
 
 type Config struct {
 	Type          Type
-	Forwarder     *string
+	Forwarders    []string
 	EtcdEndpoints []string
+	DebugMode     bool
 }
 
 func (c *Config) Validate() error {
-	if c.Type == TypeForwarder && c.Forwarder == nil {
-		return errors.New("forwarder is required when resolver type is forwarder")
+	if c.Type == TypeForwarder && len(c.Forwarders) == 0 {
+		return errors.New("at least one forwarder is required when resolver type is forwarder")
 	}
 
 	return nil
@@ -98,12 +102,18 @@ func (r *Resolver) Run(ctx context.Context) error {
 const corefile = `
 . {
     any
+	cache
     {{ if eq .Type "forwarder" }}
-    forward . {{ .Forwarder }}
+    forward . {{ join .Forwarders " " }}
+    {{ end }}
+    {{ if eq .Type "recursive" }}
+    unbound
     {{ end }}
     errors
     log
+	{{ if .DebugMode }}
 	debug
+	{{ end }}
     beaconauth {
 		etcd_endpoints {{ join .EtcdEndpoints " " }}
 	}
