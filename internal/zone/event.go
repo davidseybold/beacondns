@@ -7,9 +7,9 @@ import (
 )
 
 const (
-	EventTypeCreateZone  = "CREATE_ZONE"
-	EventTypeDeleteZone  = "DELETE_ZONE"
-	EventTypeChangeRRSet = "CHANGE_RR_SET"
+	EventTypeCreateZone  = "zone.create"
+	EventTypeDeleteZone  = "zone.delete"
+	EventTypeChangeRRSet = "zone.changeRRSet"
 )
 
 type CreateZoneEvent struct {

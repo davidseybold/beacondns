@@ -1,4 +1,4 @@
-package beacon
+package beaconauth
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"github.com/miekg/dns"
 )
 
-func (b *Beacon) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
+func (b *BeaconAuth) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
 	state := request.Request{W: w, Req: r}
 
 	qname := state.Name()
@@ -35,12 +35,16 @@ func (b *Beacon) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg)
 
 	state.SizeAndDo(m)
 	m = state.Scrub(m)
-	_ = w.WriteMsg(m)
+
+	err := w.WriteMsg(m)
+	if err != nil {
+		return dns.RcodeServerFailure, err
+	}
 
 	return dns.RcodeSuccess, nil
 }
 
-func (b *Beacon) notFoundResponse(zone string, state request.Request) int {
+func (b *BeaconAuth) notFoundResponse(zone string, state request.Request) int {
 	m := new(dns.Msg)
 	m.SetRcode(state.Req, dns.RcodeNameError)
 	m.Authoritative, m.RecursionAvailable, m.Compress = true, false, true

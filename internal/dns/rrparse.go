@@ -1,9 +1,10 @@
-package zone
+package dns
 
 import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 	"strconv"
 	"strings"
 	"unicode"
@@ -65,6 +66,10 @@ var (
 )
 
 func ParseRRs(rrset *model.ResourceRecordSet) ([]dns.RR, error) {
+	if rrset == nil {
+		return nil, nil
+	}
+
 	switch rrset.Type {
 	case model.RRTypeA:
 		return A(rrset)
@@ -112,12 +117,16 @@ func A(rrset *model.ResourceRecordSet) ([]dns.RR, error) {
 	for _, rr := range rrset.ResourceRecords {
 		r := new(dns.A)
 		r.Hdr = createHeader(rrset.Name, dns.TypeA, rrset.TTL)
-		ip := net.ParseIP(rr.Value)
-		if ip == nil || ip.To4() == nil {
+		addr, err := netip.ParseAddr(rr.Value)
+		if err != nil {
 			return nil, valueError(ErrInvalidIPv4Address, rr.Value)
 		}
 
-		r.A = ip
+		if !addr.Is4() {
+			return nil, valueError(ErrInvalidIPv4Address, rr.Value)
+		}
+
+		r.A = addr.AsSlice()
 		dnsRRs = append(dnsRRs, r)
 	}
 
@@ -133,11 +142,14 @@ func AAAA(rrset *model.ResourceRecordSet) ([]dns.RR, error) {
 	for _, rr := range rrset.ResourceRecords {
 		r := new(dns.AAAA)
 		r.Hdr = createHeader(rrset.Name, dns.TypeAAAA, rrset.TTL)
-		ip := net.ParseIP(rr.Value)
-		if ip == nil || ip.To4() != nil {
+		addr, err := netip.ParseAddr(rr.Value)
+		if err != nil {
 			return nil, valueError(ErrInvalidIPv6Address, rr.Value)
 		}
-		r.AAAA = ip
+		if !addr.Is6() {
+			return nil, valueError(ErrInvalidIPv6Address, rr.Value)
+		}
+		r.AAAA = addr.AsSlice()
 		dnsRRs = append(dnsRRs, r)
 	}
 
@@ -661,11 +673,14 @@ func parseIPv4Hint(val string) (*dns.SVCBIPv4Hint, error) {
 	strIps := strings.Split(tr, ",")
 	ips := make([]net.IP, 0, len(strIps))
 	for _, strIP := range strIps {
-		ip := net.ParseIP(strIP)
-		if ip == nil || ip.To4() == nil {
+		addr, err := netip.ParseAddr(strIP)
+		if err != nil {
 			return nil, valueError(ErrInvalidIPv4Address, strIP)
 		}
-		ips = append(ips, ip)
+		if !addr.Is4() {
+			return nil, valueError(ErrInvalidIPv4Address, strIP)
+		}
+		ips = append(ips, addr.AsSlice())
 	}
 
 	return &dns.SVCBIPv4Hint{
@@ -678,11 +693,14 @@ func parseIPv6Hint(val string) (*dns.SVCBIPv6Hint, error) {
 	strIps := strings.Split(tr, ",")
 	ips := make([]net.IP, 0, len(strIps))
 	for _, strIP := range strIps {
-		ip := net.ParseIP(strIP)
-		if ip == nil || ip.To16() == nil {
+		addr, err := netip.ParseAddr(strIP)
+		if err != nil {
 			return nil, valueError(ErrInvalidIPv6Address, strIP)
 		}
-		ips = append(ips, ip)
+		if !addr.Is6() {
+			return nil, valueError(ErrInvalidIPv6Address, strIP)
+		}
+		ips = append(ips, addr.AsSlice())
 	}
 
 	return &dns.SVCBIPv6Hint{

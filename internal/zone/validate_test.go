@@ -3,8 +3,9 @@ package zone
 import (
 	"testing"
 
-	"github.com/davidseybold/beacondns/internal/model"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/davidseybold/beacondns/internal/model"
 )
 
 func TestDomainNameRule(t *testing.T) {

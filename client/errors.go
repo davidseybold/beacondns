@@ -67,6 +67,18 @@ type InternalError struct {
 	beaconError
 }
 
+type NoSuchDomainListError struct {
+	beaconError
+}
+
+type NoSuchFirewallRuleError struct {
+	beaconError
+}
+
+type DomainExistsInDomainListError struct {
+	beaconError
+}
+
 func parseError(errResponse errorResponse) error {
 	bErr := beaconError(errResponse)
 	code := beaconerr.ErrorCode(errResponse.Code)
@@ -77,22 +89,6 @@ func parseError(errResponse errorResponse) error {
 		}
 	case beaconerr.ErrorCodeNoSuchZone:
 		return &NoSuchZoneError{
-			beaconError: bErr,
-		}
-	case beaconerr.ErrorCodeResponsePolicyAlreadyExists:
-		return &ResponsePolicyAlreadyExistsError{
-			beaconError: bErr,
-		}
-	case beaconerr.ErrorCodeResponsePolicyRuleAlreadyExists:
-		return &ResponsePolicyRuleAlreadyExistsError{
-			beaconError: bErr,
-		}
-	case beaconerr.ErrorCodeNoSuchResponsePolicy:
-		return &NoSuchResponsePolicyError{
-			beaconError: bErr,
-		}
-	case beaconerr.ErrorCodeNoSuchResponsePolicyRule:
-		return &NoSuchResponsePolicyRuleError{
 			beaconError: bErr,
 		}
 	case beaconerr.ErrorCodeNoSuchChange:
@@ -113,6 +109,18 @@ func parseError(errResponse errorResponse) error {
 		}
 	case beaconerr.ErrorCodeHostedZoneNotEmpty:
 		return &HostedZoneNotEmptyError{
+			beaconError: bErr,
+		}
+	case beaconerr.ErrorCodeNoSuchDomainList:
+		return &NoSuchDomainListError{
+			beaconError: bErr,
+		}
+	case beaconerr.ErrorCodeNoSuchFirewallRule:
+		return &NoSuchFirewallRuleError{
+			beaconError: bErr,
+		}
+	case beaconerr.ErrorCodeDomainExistsInDomainList:
+		return &DomainExistsInDomainListError{
 			beaconError: bErr,
 		}
 	default:

@@ -1,4 +1,4 @@
-package beacon
+package beaconauth
 
 import (
 	"context"
@@ -14,13 +14,13 @@ import (
 
 //nolint:gochecknoinits // used for plugin registration
 func init() {
-	plugin.Register("beacon", setup)
+	plugin.Register("beaconauth", setup)
 }
 
 func setup(c *caddy.Controller) error {
 	beacon, err := beaconParse(c)
 	if err != nil {
-		return plugin.Error("beacon", err)
+		return plugin.Error("beaconauth", err)
 	}
 
 	dnsserver.GetConfig(c).AddPlugin(func(next plugin.Handler) plugin.Handler {
@@ -34,8 +34,8 @@ func setup(c *caddy.Controller) error {
 	return nil
 }
 
-func (b *Beacon) OnStartup() error {
-	blog.Info("starting beacon")
+func (b *BeaconAuth) OnStartup() error {
+	blog.Info("starting beaconauth plugin")
 
 	etcdClient, err := kvstore.NewEtcdClient(b.config.EtcdEndpoints, kvstore.Scope{
 		Namespace: "beacon",
@@ -74,23 +74,23 @@ func (b *Beacon) OnStartup() error {
 	return nil
 }
 
-func (b *Beacon) OnFinalShutdown() error {
-	blog.Info("shutting down beacon")
+func (b *BeaconAuth) OnFinalShutdown() error {
+	blog.Info("shutting down beaconauth plugin")
 	return b.close()
 }
 
-func beaconParse(c *caddy.Controller) (*Beacon, error) {
+func beaconParse(c *caddy.Controller) (*BeaconAuth, error) {
 	if c.Next() {
 		if c.NextBlock() {
 			return parseAttributes(c)
 		}
 	}
-	return &Beacon{}, nil
+	return &BeaconAuth{}, nil
 }
 
-func parseAttributes(c *caddy.Controller) (*Beacon, error) {
-	beacon := &Beacon{
-		zoneTrie: NewZoneTrie(),
+func parseAttributes(c *caddy.Controller) (*BeaconAuth, error) {
+	beacon := &BeaconAuth{
+		zoneTrie: NewDNTrie(),
 	}
 
 	config := Config{}

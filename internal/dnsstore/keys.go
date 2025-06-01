@@ -7,8 +7,8 @@ import (
 )
 
 const (
-	keyPrefixZones          = "/zones"
-	keyPrefixResponsePolicy = "/response-policy"
+	keyPrefixZones         = "/zones"
+	keyPrefixFirewallRules = "/firewall/rule"
 )
 
 func createRecordKey(zoneName, rrName string, rrType string) string {
@@ -23,10 +23,14 @@ func createZoneRecordSetPrefix(zoneName string) string {
 	return fmt.Sprintf("/zone/%s/recordset", zoneName)
 }
 
-func createResponsePolicyRuleKey(rule *ResponsePolicyRule) string {
-	return fmt.Sprintf("%s/%s/rule/%s", keyPrefixResponsePolicy, rule.Meta.PolicyID, rule.ID)
+func createFirewallRuleMappingPrefix(ruleID uuid.UUID) string {
+	return fmt.Sprintf("%s/%s", keyPrefixFirewallRules, ruleID)
 }
 
-func createResponsePolicyRulePrefix(policyID uuid.UUID) string {
-	return fmt.Sprintf("%s/%s/rule", keyPrefixResponsePolicy, policyID)
+func createFirewallRuleMappingKey(ruleID uuid.UUID, domain string) string {
+	return fmt.Sprintf("%s/domain/%s", createFirewallRuleMappingPrefix(ruleID), domain)
+}
+
+func createFirewallRuleKey(ruleID uuid.UUID) string {
+	return fmt.Sprintf("/firewall/rules/%s", ruleID)
 }

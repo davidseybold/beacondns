@@ -1,4 +1,4 @@
-package beacon
+package beaconauth
 
 import (
 	"testing"
@@ -6,15 +6,15 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestNewZoneTrie(t *testing.T) {
-	trie := NewZoneTrie()
+func TestNewDNTrie(t *testing.T) {
+	trie := NewDNTrie()
 	assert.NotNil(t, trie)
 	assert.NotNil(t, trie.root)
-	assert.Empty(t, trie.root.ZoneName)
+	assert.Empty(t, trie.root.DomainName)
 	assert.NotNil(t, trie.root.Children)
 }
 
-func TestZoneTrie_AddZone(t *testing.T) {
+func TestDNTrie_AddZone(t *testing.T) {
 	tests := []struct {
 		name     string
 		zones    []string
@@ -54,20 +54,20 @@ func TestZoneTrie_AddZone(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			trie := NewZoneTrie()
+			trie := NewDNTrie()
 			for _, zone := range tt.zones {
-				trie.AddZone(zone)
+				trie.Insert(zone)
 			}
 
 			for zone, shouldExist := range tt.expected {
-				exists := trie.Exists(zone)
+				exists := trie.Contains(zone)
 				assert.Equal(t, shouldExist, exists, "zone %s should exist", zone)
 			}
 		})
 	}
 }
 
-func TestZoneTrie_RemoveZone(t *testing.T) {
+func TestDNTrie_RemoveZone(t *testing.T) {
 	tests := []struct {
 		name     string
 		add      []string
@@ -113,22 +113,22 @@ func TestZoneTrie_RemoveZone(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			trie := NewZoneTrie()
+			trie := NewDNTrie()
 			for _, zone := range tt.add {
-				trie.AddZone(zone)
+				trie.Insert(zone)
 			}
 
-			trie.RemoveZone(tt.remove)
+			trie.Remove(tt.remove)
 
 			for zone, shouldExist := range tt.expected {
-				exists := trie.Exists(zone)
+				exists := trie.Contains(zone)
 				assert.Equal(t, shouldExist, exists, "zone %s should exist", zone)
 			}
 		})
 	}
 }
 
-func TestZoneTrie_FindLongestMatch(t *testing.T) {
+func TestDNTrie_FindLongestMatch(t *testing.T) {
 	tests := []struct {
 		name     string
 		zones    []string
@@ -181,9 +181,9 @@ func TestZoneTrie_FindLongestMatch(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			trie := NewZoneTrie()
+			trie := NewDNTrie()
 			for _, zone := range tt.zones {
-				trie.AddZone(zone)
+				trie.Insert(zone)
 			}
 
 			match := trie.FindLongestMatch(tt.query)
@@ -192,23 +192,23 @@ func TestZoneTrie_FindLongestMatch(t *testing.T) {
 	}
 }
 
-func TestZoneTrie_EdgeCases(t *testing.T) {
-	trie := NewZoneTrie()
+func TestDNTrie_EdgeCases(t *testing.T) {
+	trie := NewDNTrie()
 
 	// Test with non-FQDN input
-	trie.AddZone("example.com")
-	assert.True(t, trie.Exists("example.com"))
+	trie.Insert("example.com")
+	assert.True(t, trie.Contains("example.com"))
 
 	// Test with empty string
-	trie.AddZone("")
-	assert.True(t, trie.Exists(""))
+	trie.Insert("")
+	assert.True(t, trie.Contains(""))
 
 	// Test with root domain
-	trie.AddZone(".")
-	assert.True(t, trie.Exists("."))
+	trie.Insert(".")
+	assert.True(t, trie.Contains("."))
 
 	// Test with very long domain
 	longDomain := "a." + string(make([]byte, 100)) + ".example.com."
-	trie.AddZone(longDomain)
-	assert.True(t, trie.Exists(longDomain))
+	trie.Insert(longDomain)
+	assert.True(t, trie.Contains(longDomain))
 }

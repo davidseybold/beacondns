@@ -7,7 +7,6 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/pkg/errors"
 
 	"github.com/davidseybold/beacondns/internal/db/postgres"
@@ -160,14 +159,7 @@ var _ ZoneRepository = (*PostgresZoneRepository)(nil)
 
 func (p *PostgresZoneRepository) CreateZone(ctx context.Context, zone *model.Zone) (*model.ZoneInfo, error) {
 	if _, err := p.db.Exec(ctx, insertZoneQuery, zone.ID, zone.Name); err != nil {
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) {
-			if pgErr.Code == "23505" {
-				return nil, ErrEntityAlreadyExists
-			}
-		}
-
-		return nil, fmt.Errorf("failed to create zone: %w", err)
+		return nil, handleError(err, "failed to create zone: %w", err)
 	}
 
 	if err := p.insertResourceRecordSets(ctx, zone.ID, zone.ResourceRecordSets); err != nil {
@@ -214,13 +206,13 @@ func (p *PostgresZoneRepository) insertResourceRecordSet(
 	var id uuid.UUID
 	err := row.Scan(&id)
 	if err != nil {
-		return fmt.Errorf("failed to insert resource record set: %w", err)
+		return handleError(err, "failed to insert resource record set: %w", err)
 	}
 
 	for _, rr := range recordSet.ResourceRecords {
 		_, err = p.db.Exec(ctx, insertResourceRecordQuery, id, rr.Value)
 		if err != nil {
-			return fmt.Errorf("failed to insert resource record: %w", err)
+			return handleError(err, "failed to insert resource record: %w", err)
 		}
 	}
 
@@ -230,7 +222,7 @@ func (p *PostgresZoneRepository) insertResourceRecordSet(
 func (p *PostgresZoneRepository) DeleteZone(ctx context.Context, name string) error {
 	ct, err := p.db.Exec(ctx, deleteZoneQuery, name)
 	if err != nil {
-		return fmt.Errorf("failed to delete zone: %w", err)
+		return handleError(err, "failed to delete zone: %w", err)
 	}
 
 	if ct.RowsAffected() == 0 {
@@ -306,12 +298,12 @@ func (p *PostgresZoneRepository) GetZone(ctx context.Context, name string) (*mod
 	if err != nil && errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrEntityNotFound
 	} else if err != nil {
-		return nil, fmt.Errorf("failed to get zone: %w", err)
+		return nil, handleError(err, "failed to get zone: %w", err)
 	}
 
 	recordSets, err := p.GetZoneResourceRecordSets(ctx, zone.Name)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get resource record sets for zone: %w", err)
+		return nil, handleError(err, "failed to get resource record sets for zone: %w", err)
 	}
 	zone.ResourceRecordSets = recordSets
 
@@ -324,7 +316,7 @@ func (p *PostgresZoneRepository) GetZoneResourceRecordSets(
 ) ([]model.ResourceRecordSet, error) {
 	rows, err := p.db.Query(ctx, selectResourceRecordSetsForZoneQuery, zoneName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get resource record sets for zone: %w", err)
+		return nil, handleError(err, "failed to get resource record sets for zone: %w", err)
 	}
 	defer rows.Close()
 
@@ -334,7 +326,7 @@ func (p *PostgresZoneRepository) GetZoneResourceRecordSets(
 		var rrSetID uuid.UUID
 		err = rows.Scan(&rrSetID, &recordSet.Name, &recordSet.Type, &recordSet.TTL)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return nil, fmt.Errorf("failed to scan resource record set: %w", err)
+			return nil, handleError(err, "failed to scan resource record set: %w", err)
 		} else if errors.Is(err, sql.ErrNoRows) {
 			continue
 		}
@@ -342,7 +334,7 @@ func (p *PostgresZoneRepository) GetZoneResourceRecordSets(
 		var records []model.ResourceRecord
 		records, err = p.getResourceRecordSetRecords(ctx, rrSetID)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get resource records for resource record set: %w", err)
+			return nil, handleError(err, "failed to get resource records for resource record set: %w", err)
 		}
 		recordSet.ResourceRecords = records
 
@@ -359,7 +351,7 @@ func (p *PostgresZoneRepository) GetZoneInfo(ctx context.Context, name string) (
 	if err != nil && errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrEntityNotFound
 	} else if err != nil {
-		return nil, fmt.Errorf("failed to get zone: %w", err)
+		return nil, handleError(err, "failed to get zone: %w", err)
 	}
 
 	return &zone, nil
@@ -368,7 +360,7 @@ func (p *PostgresZoneRepository) GetZoneInfo(ctx context.Context, name string) (
 func (p *PostgresZoneRepository) ListZoneInfos(ctx context.Context) ([]model.ZoneInfo, error) {
 	rows, err := p.db.Query(ctx, selectZoneInfosQuery)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list zone infos: %w", err)
+		return nil, handleError(err, "failed to list zone infos: %w", err)
 	}
 	defer rows.Close()
 
@@ -377,7 +369,7 @@ func (p *PostgresZoneRepository) ListZoneInfos(ctx context.Context) ([]model.Zon
 		var zoneInfo model.ZoneInfo
 		err = rows.Scan(&zoneInfo.ID, &zoneInfo.Name, &zoneInfo.ResourceRecordSetCount)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return nil, fmt.Errorf("failed to scan zone info: %w", err)
+			return nil, handleError(err, "failed to scan zone info: %w", err)
 		} else if errors.Is(err, sql.ErrNoRows) {
 			continue
 		}
@@ -400,7 +392,7 @@ func (p *PostgresZoneRepository) GetResourceRecordSet(
 	if err != nil && errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrEntityNotFound
 	} else if err != nil {
-		return nil, fmt.Errorf("failed to get resource record set: %w", err)
+		return nil, handleError(err, "failed to get resource record set: %w", err)
 	}
 
 	records, err := p.getResourceRecordSetRecords(ctx, rrSetID)
@@ -418,7 +410,7 @@ func (p *PostgresZoneRepository) getResourceRecordSetRecords(
 ) ([]model.ResourceRecord, error) {
 	rows, err := p.db.Query(ctx, selectResourceRecordsQuery, rrSetID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get resource records for resource record set: %w", err)
+		return nil, handleError(err, "failed to get resource records for resource record set: %w", err)
 	}
 	defer rows.Close()
 
@@ -427,7 +419,7 @@ func (p *PostgresZoneRepository) getResourceRecordSetRecords(
 		var rr model.ResourceRecord
 		err = rows.Scan(&rr.Value)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return nil, fmt.Errorf("failed to scan resource record: %w", err)
+			return nil, handleError(err, "failed to scan resource record: %w", err)
 		}
 		records = append(records, rr)
 	}
@@ -442,7 +434,7 @@ func (p *PostgresZoneRepository) GetResourceRecordSetsByName(
 ) ([]model.ResourceRecordSet, error) {
 	rows, err := p.db.Query(ctx, selectResourceRecordSetsByNameQuery, zoneName, name)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get resource record sets by name: %w", err)
+		return nil, handleError(err, "failed to get resource record sets by name: %w", err)
 	}
 	defer rows.Close()
 
@@ -451,7 +443,7 @@ func (p *PostgresZoneRepository) GetResourceRecordSetsByName(
 		var recordSet model.ResourceRecordSet
 		err = rows.Scan(&recordSet.Name, &recordSet.Type, &recordSet.TTL)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
-			return nil, fmt.Errorf("failed to scan resource record set: %w", err)
+			return nil, handleError(err, "failed to scan resource record set: %w", err)
 		} else if errors.Is(err, sql.ErrNoRows) {
 			continue
 		}
@@ -467,21 +459,14 @@ func (p *PostgresZoneRepository) CreateChange(
 ) (*model.Change, error) {
 	actionsJSON, err := json.Marshal(change.Actions)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal change data: %w", err)
+		return nil, handleError(err, "failed to marshal change data: %w", err)
 	}
 
 	row := p.db.QueryRow(ctx, insertChangeQuery, change.ID, change.ZoneID, actionsJSON, change.Status)
 
 	err = row.Scan(&change.SubmittedAt)
 	if err != nil {
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) {
-			if pgErr.Code == "23505" {
-				return nil, ErrEntityAlreadyExists
-			}
-		}
-
-		return nil, fmt.Errorf("failed to insert change into database: %w", err)
+		return nil, handleError(err, "failed to insert change into database: %w", err)
 	}
 
 	return &change, nil
@@ -496,12 +481,12 @@ func (p *PostgresZoneRepository) GetChange(ctx context.Context, id uuid.UUID) (*
 	if err != nil && errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrEntityNotFound
 	} else if err != nil {
-		return nil, fmt.Errorf("failed to get change from database: %w", err)
+		return nil, handleError(err, "failed to get change from database: %w", err)
 	}
 
 	err = json.Unmarshal(actionsJSON, &change.Actions)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal change actions: %w", err)
+		return nil, handleError(err, "failed to unmarshal change actions: %w", err)
 	}
 
 	return &change, nil
@@ -514,7 +499,7 @@ func (p *PostgresZoneRepository) UpdateChangeStatus(
 ) error {
 	_, err := p.db.Exec(ctx, updateChangeStatusQuery, id, status)
 	if err != nil {
-		return fmt.Errorf("failed to update change status: %w", err)
+		return handleError(err, "failed to update change status: %w", err)
 	}
 	return nil
 }
@@ -522,7 +507,7 @@ func (p *PostgresZoneRepository) UpdateChangeStatus(
 func (p *PostgresZoneRepository) GetChangesByZone(ctx context.Context, zoneName string) ([]model.Change, error) {
 	rows, err := p.db.Query(ctx, getChangesByZoneQuery, zoneName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get changes by zone: %w", err)
+		return nil, handleError(err, "failed to get changes by zone: %w", err)
 	}
 	defer rows.Close()
 
@@ -532,12 +517,12 @@ func (p *PostgresZoneRepository) GetChangesByZone(ctx context.Context, zoneName 
 		var actionsJSON []byte
 		err = rows.Scan(&change.ID, &change.ZoneID, &actionsJSON, &change.Status, &change.SubmittedAt)
 		if err != nil {
-			return nil, fmt.Errorf("failed to scan change row: %w", err)
+			return nil, handleError(err, "failed to scan change row: %w", err)
 		}
 
 		err = json.Unmarshal(actionsJSON, &change.Actions)
 		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal change actions: %w", err)
+			return nil, handleError(err, "failed to unmarshal change actions: %w", err)
 		}
 
 		changes = append(changes, change)

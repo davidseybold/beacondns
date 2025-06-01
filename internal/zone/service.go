@@ -290,14 +290,14 @@ func (d *DefaultService) DeleteZone(ctx context.Context, name string) error {
 	event := NewDeleteZoneEvent(zoneName)
 
 	err = d.registry.InTx(ctx, func(ctx context.Context, r repository.Registry) error {
-		err := r.GetZoneRepository().DeleteZone(ctx, zoneName)
-		if err != nil {
-			return err
+		deleteErr := r.GetZoneRepository().DeleteZone(ctx, zoneName)
+		if deleteErr != nil {
+			return deleteErr
 		}
 
-		err = r.GetEventRepository().CreateEvent(ctx, event)
-		if err != nil {
-			return err
+		deleteErr = r.GetEventRepository().CreateEvent(ctx, event)
+		if deleteErr != nil {
+			return deleteErr
 		}
 
 		return nil

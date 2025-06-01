@@ -1,8 +1,11 @@
 package dnsstore
 
 import (
+	"github.com/google/uuid"
 	"github.com/miekg/dns"
 	"github.com/vmihailenco/msgpack/v5"
+
+	"github.com/davidseybold/beacondns/internal/model"
 )
 
 const (
@@ -57,15 +60,29 @@ func unmarshalRRSet(data []byte) (*rrSet, error) {
 	return rrset, nil
 }
 
-func marshalResponsePolicyRule(rule *ResponsePolicyRule) ([]byte, error) {
+type firewallRule struct {
+	ID                uuid.UUID                            `msg:"id"`
+	Action            model.FirewallRuleAction             `msg:"action"`
+	BlockResponseType *model.FirewallRuleBlockResponseType `msg:"blockResponseType,omitempty"`
+	BlockResponse     rrSet                                `msg:"blockResponse,omitempty"`
+	Priority          uint                                 `msg:"priority"`
+}
+
+func marshalFirewallRule(rule *FirewallRule) ([]byte, error) {
 	return msgpack.Marshal(rule)
 }
 
-func unmarshalResponsePolicyRule(data []byte) (*ResponsePolicyRule, error) {
-	rule := &ResponsePolicyRule{}
+func unmarshalFirewallRule(data []byte) (*FirewallRule, error) {
+	rule := &firewallRule{}
 	err := msgpack.Unmarshal(data, rule)
 	if err != nil {
 		return nil, err
 	}
-	return rule, nil
+	return &FirewallRule{
+		ID:                rule.ID,
+		Action:            rule.Action,
+		BlockResponseType: rule.BlockResponseType,
+		BlockResponse:     rule.BlockResponse.RRs,
+		Priority:          rule.Priority,
+	}, nil
 }

@@ -7,17 +7,16 @@ import (
 type ErrorCode string
 
 const (
-	ErrorCodeZoneAlreadyExists               ErrorCode = "ZoneAlreadyExists"
-	ErrorCodeNoSuchZone                      ErrorCode = "NoSuchZone"
-	ErrorCodeResponsePolicyAlreadyExists     ErrorCode = "ResponsePolicyAlreadyExists"
-	ErrorCodeResponsePolicyRuleAlreadyExists ErrorCode = "ResponsePolicyRuleAlreadyExists"
-	ErrorCodeNoSuchResponsePolicy            ErrorCode = "NoSuchResponsePolicy"
-	ErrorCodeNoSuchResponsePolicyRule        ErrorCode = "NoSuchResponsePolicyRule"
-	ErrorCodeNoSuchChange                    ErrorCode = "NoSuchChange"
-	ErrorCodeNoSuchResourceRecordSet         ErrorCode = "NoSuchResourceRecordSet"
-	ErrorCodeHostedZoneNotEmpty              ErrorCode = "HostedZoneNotEmpty"
-	ErrorCodeInvalidArgument                 ErrorCode = "InvalidArgument"
-	ErrorCodeInternalError                   ErrorCode = "InternalError"
+	ErrorCodeZoneAlreadyExists        ErrorCode = "ZoneAlreadyExists"
+	ErrorCodeNoSuchZone               ErrorCode = "NoSuchZone"
+	ErrorCodeNoSuchChange             ErrorCode = "NoSuchChange"
+	ErrorCodeNoSuchResourceRecordSet  ErrorCode = "NoSuchResourceRecordSet"
+	ErrorCodeNoSuchDomainList         ErrorCode = "NoSuchDomainList"
+	ErrorCodeNoSuchFirewallRule       ErrorCode = "NoSuchFirewallRule"
+	ErrorCodeHostedZoneNotEmpty       ErrorCode = "HostedZoneNotEmpty"
+	ErrorCodeDomainExistsInDomainList ErrorCode = "DomainExistsInDomainList"
+	ErrorCodeInvalidArgument          ErrorCode = "InvalidArgument"
+	ErrorCodeInternalError            ErrorCode = "InternalError"
 )
 
 func (e ErrorCode) String() string {
@@ -191,62 +190,6 @@ func ErrNoSuchResourceRecordSet(message string) *NoSuchResourceRecordSetError {
 	}
 }
 
-type ResponsePolicyAlreadyExistsError struct {
-	*ConflictError
-}
-
-func (e *ResponsePolicyAlreadyExistsError) Unwrap() error {
-	return e.ConflictError
-}
-
-type ResponsePolicyRuleAlreadyExistsError struct {
-	*ConflictError
-}
-
-func (e *ResponsePolicyRuleAlreadyExistsError) Unwrap() error {
-	return e.ConflictError
-}
-
-func ErrResponsePolicyRuleAlreadyExists(message string) *ResponsePolicyRuleAlreadyExistsError {
-	return &ResponsePolicyRuleAlreadyExistsError{
-		ConflictError: newConflictError(ErrorCodeResponsePolicyRuleAlreadyExists, message),
-	}
-}
-
-func ErrResponsePolicyAlreadyExists(message string) *ResponsePolicyAlreadyExistsError {
-	return &ResponsePolicyAlreadyExistsError{
-		ConflictError: newConflictError(ErrorCodeResponsePolicyAlreadyExists, message),
-	}
-}
-
-type NoSuchResponsePolicyRuleError struct {
-	*NoSuchError
-}
-
-func (e *NoSuchResponsePolicyRuleError) Unwrap() error {
-	return e.NoSuchError
-}
-
-func ErrNoSuchResponsePolicyRule(message string) *NoSuchResponsePolicyRuleError {
-	return &NoSuchResponsePolicyRuleError{
-		NoSuchError: newNoSuchError(ErrorCodeNoSuchResponsePolicyRule, message),
-	}
-}
-
-type NoSuchResponsePolicyError struct {
-	*NoSuchError
-}
-
-func (e *NoSuchResponsePolicyError) Unwrap() error {
-	return e.NoSuchError
-}
-
-func ErrNoSuchResponsePolicy(message string) *NoSuchResponsePolicyError {
-	return &NoSuchResponsePolicyError{
-		NoSuchError: newNoSuchError(ErrorCodeNoSuchResponsePolicy, message),
-	}
-}
-
 func ErrInternalError(message string, cause error) *InternalError {
 	return &InternalError{
 		BeaconError: NewBeaconError(ErrorCodeInternalError, message, cause),
@@ -280,6 +223,48 @@ func (e *HostedZoneNotEmptyError) Unwrap() error {
 func ErrHostedZoneNotEmpty(message string) *HostedZoneNotEmptyError {
 	return &HostedZoneNotEmptyError{
 		BadRequestError: newBadRequestError(ErrorCodeHostedZoneNotEmpty, message, nil),
+	}
+}
+
+type NoSuchDomainListError struct {
+	*NoSuchError
+}
+
+func (e *NoSuchDomainListError) Unwrap() error {
+	return e.NoSuchError
+}
+
+func ErrNoSuchDomainList(message string) *NoSuchDomainListError {
+	return &NoSuchDomainListError{
+		NoSuchError: newNoSuchError(ErrorCodeNoSuchDomainList, message),
+	}
+}
+
+type NoSuchFirewallRuleError struct {
+	*NoSuchError
+}
+
+func (e *NoSuchFirewallRuleError) Unwrap() error {
+	return e.NoSuchError
+}
+
+func ErrNoSuchFirewallRule(message string) *NoSuchFirewallRuleError {
+	return &NoSuchFirewallRuleError{
+		NoSuchError: newNoSuchError(ErrorCodeNoSuchFirewallRule, message),
+	}
+}
+
+type DomainExistsInDomainListError struct {
+	*ConflictError
+}
+
+func (e *DomainExistsInDomainListError) Unwrap() error {
+	return e.ConflictError
+}
+
+func ErrDomainExistsInDomainList(message string) *DomainExistsInDomainListError {
+	return &DomainExistsInDomainListError{
+		ConflictError: newConflictError(ErrorCodeDomainExistsInDomainList, message),
 	}
 }
 

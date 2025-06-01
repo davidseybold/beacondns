@@ -3,9 +3,11 @@ package zone
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 
+	"github.com/davidseybold/beacondns/internal/dns"
 	"github.com/davidseybold/beacondns/internal/dnsstore"
 	"github.com/davidseybold/beacondns/internal/model"
 	"github.com/davidseybold/beacondns/internal/repository"
@@ -24,17 +26,16 @@ type EventProcessorDeps struct {
 }
 
 func (d *EventProcessorDeps) Validate() error {
-
 	if d.Repository == nil {
-		return fmt.Errorf("repository is required")
+		return errors.New("repository is required")
 	}
 
 	if d.DNSStore == nil {
-		return fmt.Errorf("dns store is required")
+		return errors.New("dns store is required")
 	}
 
 	if d.Logger == nil {
-		return fmt.Errorf("logger is required")
+		return errors.New("logger is required")
 	}
 
 	return nil
@@ -154,7 +155,7 @@ func processChangeAction(tx dnsstore.ZoneTransaction, changeAction model.ChangeA
 		return nil
 	}
 
-	rrset, err := ParseRRs(changeAction.ResourceRecordSet)
+	rrset, err := dns.ParseRRs(changeAction.ResourceRecordSet)
 	if err != nil {
 		return err
 	}

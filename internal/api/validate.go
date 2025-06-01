@@ -7,37 +7,18 @@ import (
 )
 
 var validators = map[string]validator.Func{
-	"responsePolicyRuleTriggerType": responsePolicyRuleTriggerTypeValidator,
-	"responsePolicyRuleActionType":  responsePolicyRuleActionTypeValidator,
-	"responsePolicyRuleLocalData":   responsePolicyRuleLocalDataValidator,
+	"firewallRuleAction":            validateFirewallRuleAction,
+	"firewallRuleBlockResponseType": validateFirewallRuleBlockResponseType,
 }
 
-func responsePolicyRuleTriggerTypeValidator(fl validator.FieldLevel) bool {
-	triggerType := fl.Field().String()
-	return model.ResponsePolicyRuleTriggerType(triggerType).IsValid()
+func validateFirewallRuleAction(fl validator.FieldLevel) bool {
+	action := fl.Field().String()
+	_, ok := model.ValidFirewallRuleActions[model.FirewallRuleAction(action)]
+	return ok
 }
 
-func responsePolicyRuleActionTypeValidator(fl validator.FieldLevel) bool {
-	actionType := fl.Field().String()
-	return model.ResponsePolicyRuleActionType(actionType).IsValid()
-}
-
-func responsePolicyRuleLocalDataValidator(fl validator.FieldLevel) bool {
-
-	actionType := fl.Parent().FieldByName("ActionType").String()
-
-	if actionType != model.ResponsePolicyRuleActionTypeLOCALDATA.String() {
-		return true
-	}
-
-	localData, ok := fl.Field().Interface().([]model.ResourceRecordSet)
-	if !ok {
-		return false
-	}
-
-	if len(localData) == 0 {
-		return false
-	}
-
-	return true
+func validateFirewallRuleBlockResponseType(fl validator.FieldLevel) bool {
+	responseType := fl.Field().String()
+	_, ok := model.ValidFirewallRuleBlockResponseTypes[model.FirewallRuleBlockResponseType(responseType)]
+	return ok
 }

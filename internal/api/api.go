@@ -12,14 +12,14 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/davidseybold/beacondns/internal/beaconerr"
-	"github.com/davidseybold/beacondns/internal/responsepolicy"
+	"github.com/davidseybold/beacondns/internal/firewall"
 	"github.com/davidseybold/beacondns/internal/zone"
 )
 
 func NewHTTPHandler(
 	logger *slog.Logger,
 	zoneService zone.Service,
-	responsePolicyService responsepolicy.Service,
+	firewallService firewall.Service,
 ) (http.Handler, error) {
 	r := gin.Default()
 
@@ -33,9 +33,9 @@ func NewHTTPHandler(
 	}
 
 	handler := &handler{
-		logger:                logger,
-		zoneService:           zoneService,
-		responsePolicyService: responsePolicyService,
+		logger:          logger,
+		zoneService:     zoneService,
+		firewallService: firewallService,
 	}
 
 	r.GET("/health", handler.Health)
@@ -53,28 +53,27 @@ func NewHTTPHandler(
 	}
 
 	{
-		g := r.Group("/v1/response-policies")
-		g.POST("", handler.CreateResponsePolicy)
-		g.GET("", handler.ListResponsePolicies)
-		g.GET("/:policyID", handler.GetResponsePolicy)
-		g.POST("/:policyID", handler.UpdateResponsePolicy)
-		g.DELETE("/:policyID", handler.DeleteResponsePolicy)
-		g.POST("/:policyID/toggle", handler.ToggleResponsePolicy)
-		g.POST("/:policyID/rules", handler.CreateResponsePolicyRule)
-		g.GET("/:policyID/rules", handler.ListResponsePolicyRules)
-		g.GET("/:policyID/rules/:ruleID", handler.GetResponsePolicyRule)
-		g.POST("/:policyID/rules/:ruleID", handler.UpdateResponsePolicyRule)
-		g.DELETE("/:policyID/rules/:ruleID", handler.DeleteResponsePolicyRule)
+		g := r.Group("/v1/firewall")
+		g.POST("/domain-lists", handler.CreateDomainList)
+		g.DELETE("/domain-lists/:id", handler.DeleteDomainList)
+		g.GET("/domain-lists/:id/domains", handler.ListDomainListDomains)
+		g.POST("/domain-lists/:id/domains", handler.AddDomainsToDomainList)
+		g.DELETE("/domain-lists/:id/domains", handler.RemoveDomainsFromDomainList)
+		g.GET("/domain-lists/:id", handler.GetDomainList)
+		g.GET("/domain-lists", handler.ListDomainLists)
+		g.POST("/rules", handler.CreateFirewallRule)
+		g.DELETE("/rules/:id", handler.DeleteFirewallRule)
+		g.GET("/rules/:id", handler.GetFirewallRule)
+		g.GET("/rules", handler.ListFirewallRules)
 	}
 
 	return r, nil
 }
 
 type handler struct {
-	zoneService           zone.Service
-	responsePolicyService responsepolicy.Service
-
-	logger *slog.Logger
+	zoneService     zone.Service
+	firewallService firewall.Service
+	logger          *slog.Logger
 }
 
 func (h *handler) Health(c *gin.Context) {

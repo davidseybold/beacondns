@@ -34,33 +34,6 @@ func TestParseError(t *testing.T) {
 			wantErrMsg: "NoSuchZone: zone not found",
 		},
 		{
-			name: "response policy already exists",
-			errResp: errorResponse{
-				Code:    string(beaconerr.ErrorCodeResponsePolicyAlreadyExists),
-				Message: "response policy already exists",
-			},
-			wantErr:    &ResponsePolicyAlreadyExistsError{},
-			wantErrMsg: "ResponsePolicyAlreadyExists: response policy already exists",
-		},
-		{
-			name: "no such response policy",
-			errResp: errorResponse{
-				Code:    string(beaconerr.ErrorCodeNoSuchResponsePolicy),
-				Message: "response policy not found",
-			},
-			wantErr:    &NoSuchResponsePolicyError{},
-			wantErrMsg: "NoSuchResponsePolicy: response policy not found",
-		},
-		{
-			name: "no such response policy rule",
-			errResp: errorResponse{
-				Code:    string(beaconerr.ErrorCodeNoSuchResponsePolicyRule),
-				Message: "response policy rule not found",
-			},
-			wantErr:    &NoSuchResponsePolicyRuleError{},
-			wantErrMsg: "NoSuchResponsePolicyRule: response policy rule not found",
-		},
-		{
 			name: "no such change",
 			errResp: errorResponse{
 				Code:    string(beaconerr.ErrorCodeNoSuchChange),

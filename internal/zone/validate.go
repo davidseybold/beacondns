@@ -7,10 +7,10 @@ import (
 
 	"github.com/miekg/dns"
 
+	bdns "github.com/davidseybold/beacondns/internal/dns"
 	"github.com/davidseybold/beacondns/internal/model"
 )
 
-// Sentinel errors for validation failures
 var (
 	ErrCNAMESelfReference = errors.New("CNAME record cannot point to itself")
 	ErrCNAMEConflict      = errors.New("cannot add CNAME record: record of different type already exists")
@@ -174,7 +174,7 @@ func supportedRRTypeRule(_ *model.Zone, changes []model.ChangeAction) error {
 
 func recordValueRule(_ *model.Zone, changes []model.ChangeAction) error {
 	for _, change := range changes {
-		_, err := ParseRRs(change.ResourceRecordSet)
+		_, err := bdns.ParseRRs(change.ResourceRecordSet)
 		if err != nil {
 			return fmt.Errorf("%w: %w", ErrInvalidRecordValue, err)
 		}

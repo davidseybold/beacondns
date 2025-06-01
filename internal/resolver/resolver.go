@@ -16,62 +16,22 @@ import (
 	_ "github.com/coredns/coredns/plugin/forward" // used for plugin registration.
 	_ "github.com/coredns/coredns/plugin/log"     // used for plugin registration.
 
-	_ "github.com/davidseybold/beacondns/internal/resolver/plugin/beacon" // used for plugin registration.
+	_ "github.com/davidseybold/beacondns/internal/resolver/plugin/beaconauth"     // used for plugin registration.
+	_ "github.com/davidseybold/beacondns/internal/resolver/plugin/beaconfirewall" // used for plugin registration.
 )
 
 //nolint:gochecknoinits // used for plugin registration.
 func init() {
 	//nolint:reassign // used to register custom plugin in addition to the default ones.
 	dnsserver.Directives = []string{
-		"root",
-		"metadata",
-		"geoip",
-		"cancel",
-		"tls",
-		"timeouts",
-		"multisocket",
-		"reload",
-		"nsid",
-		"bufsize",
-		"bind",
 		"debug",
-		"trace",
-		"ready",
-		"health",
-		"pprof",
-		"prometheus",
 		"errors",
 		"log",
-		"dnstap",
-		"local",
-		"dns64",
-		"acl",
 		"any",
-		"chaos",
-		"loadbalance",
-		"tsig",
 		"cache",
-		"rewrite",
-		"header",
-		"dnssec",
-		"autopath",
-		"minimal",
-		"template",
-		"transfer",
-		"hosts",
-		"file",
-		"auto",
-		"secondary",
-		"etcd",
-		"loop",
-		"beacon", // custom plugin
+		"beaconfirewall", // custom plugin
+		"beaconauth",     // custom plugin
 		"forward",
-		"grpc",
-		"erratic",
-		"whoami",
-		"on",
-		"sign",
-		"view",
 	}
 }
 
@@ -144,7 +104,10 @@ const corefile = `
     errors
     log
 	debug
-    beacon {
+    beaconauth {
+		etcd_endpoints {{ join .EtcdEndpoints " " }}
+	}
+	beaconfirewall {
 		etcd_endpoints {{ join .EtcdEndpoints " " }}
 	}
 }`

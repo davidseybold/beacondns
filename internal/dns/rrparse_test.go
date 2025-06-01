@@ -1,4 +1,4 @@
-package zone
+package dns
 
 import (
 	"net"

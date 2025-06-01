@@ -19,9 +19,9 @@ import (
 	"github.com/davidseybold/beacondns/internal/db/kvstore"
 	"github.com/davidseybold/beacondns/internal/db/postgres"
 	"github.com/davidseybold/beacondns/internal/dnsstore"
+	"github.com/davidseybold/beacondns/internal/firewall"
 	"github.com/davidseybold/beacondns/internal/log"
 	"github.com/davidseybold/beacondns/internal/repository"
-	"github.com/davidseybold/beacondns/internal/responsepolicy"
 	"github.com/davidseybold/beacondns/internal/worker"
 	"github.com/davidseybold/beacondns/internal/zone"
 )
@@ -102,14 +102,14 @@ func start(ctx context.Context, w io.Writer) error {
 		return fmt.Errorf("error creating zone event processor: %w", err)
 	}
 
-	responsePolicyService := responsepolicy.NewService(repoRegistry)
-	responsePolicyEventProcessor, err := responsepolicy.NewEventProcessor(&responsepolicy.EventProcessorDeps{
+	firewallService := firewall.NewService(repoRegistry)
+	firewallEventProcessor, err := firewall.NewEventProcessor(&firewall.EventProcessorDeps{
 		Repository: repoRegistry,
-		Logger:     logger,
 		DNSStore:   dnsStore,
+		Logger:     logger,
 	})
 	if err != nil {
-		return fmt.Errorf("error creating response policy event processor: %w", err)
+		return fmt.Errorf("error creating firewall event processor: %w", err)
 	}
 
 	workerCtx, workerCancel := context.WithCancel(ctx)
@@ -118,10 +118,10 @@ func start(ctx context.Context, w io.Writer) error {
 	worker := worker.New(
 		repoRegistry,
 		logger,
-		[]worker.EventProcessor{zoneEventProcessor, responsePolicyEventProcessor},
+		[]worker.EventProcessor{zoneEventProcessor, firewallEventProcessor},
 	)
 
-	handler, err := api.NewHTTPHandler(logger, zoneService, responsePolicyService)
+	handler, err := api.NewHTTPHandler(logger, zoneService, firewallService)
 	if err != nil {
 		return fmt.Errorf("error creating HTTP handler: %w", err)
 	}

@@ -7,6 +7,10 @@ import (
 )
 
 func convertAPIResourceRecordSetToModel(recordSet *ResourceRecordSet) *model.ResourceRecordSet {
+	if recordSet == nil {
+		return nil
+	}
+
 	return &model.ResourceRecordSet{
 		Name:            recordSet.Name,
 		Type:            model.RRType(strings.ToUpper(recordSet.Type)),
@@ -26,6 +30,10 @@ func convertAPIResourceRecordsToModel(records []ResourceRecord) []model.Resource
 }
 
 func convertModelResourceRecordSetToAPI(rrSet *model.ResourceRecordSet) *ResourceRecordSet {
+	if rrSet == nil {
+		return nil
+	}
+
 	return &ResourceRecordSet{
 		Name:            rrSet.Name,
 		Type:            strings.ToUpper(string(rrSet.Type)),
@@ -44,55 +52,19 @@ func convertModelResourceRecordsToAPI(records []model.ResourceRecord) []Resource
 	return apiRecords
 }
 
-func convertModelResponsePolicyToAPI(policy *model.ResponsePolicy) *ResponsePolicy {
-	return &ResponsePolicy{
-		ID:          policy.ID.String(),
-		Name:        policy.Name,
-		Description: policy.Description,
-		Priority:    policy.Priority,
-		Enabled:     policy.Enabled,
+func convertModelFirewallRuleToAPI(rule *model.FirewallRule) *FirewallRule {
+	var blockResponseType *string
+	if rule.BlockResponseType != nil {
+		t := string(*rule.BlockResponseType)
+		blockResponseType = &t
 	}
-}
 
-func convertModelResponsePoliciesToAPI(policies []model.ResponsePolicy) []ResponsePolicy {
-	var apiPolicies []ResponsePolicy
-	for _, policy := range policies {
-		apiPolicies = append(apiPolicies, *convertModelResponsePolicyToAPI(&policy))
+	return &FirewallRule{
+		ID:                rule.ID.String(),
+		DomainListID:      rule.DomainListID.String(),
+		Action:            string(rule.Action),
+		BlockResponseType: blockResponseType,
+		BlockResponse:     convertModelResourceRecordSetToAPI(rule.BlockResponse),
+		Priority:          rule.Priority,
 	}
-	return apiPolicies
-}
-
-func convertAPIResourceRecordSetsToModel(records []ResourceRecordSet) []model.ResourceRecordSet {
-	var modelRecords []model.ResourceRecordSet
-	for _, record := range records {
-		modelRecords = append(modelRecords, *convertAPIResourceRecordSetToModel(&record))
-	}
-	return modelRecords
-}
-
-func convertModelResponsePolicyRuleToAPI(rule *model.ResponsePolicyRule) *ResponsePolicyRule {
-	return &ResponsePolicyRule{
-		ID:           rule.ID.String(),
-		Name:         rule.Name,
-		TriggerType:  string(rule.TriggerType),
-		TriggerValue: rule.TriggerValue,
-		ActionType:   string(rule.ActionType),
-		LocalData:    convertModelResourceRecordSetsToAPI(rule.LocalData),
-	}
-}
-
-func convertModelResourceRecordSetsToAPI(records []model.ResourceRecordSet) []ResourceRecordSet {
-	var apiRecords []ResourceRecordSet
-	for _, record := range records {
-		apiRecords = append(apiRecords, *convertModelResourceRecordSetToAPI(&record))
-	}
-	return apiRecords
-}
-
-func convertModelResponsePolicyRulesToAPI(rules []model.ResponsePolicyRule) []ResponsePolicyRule {
-	var apiRules []ResponsePolicyRule
-	for _, rule := range rules {
-		apiRules = append(apiRules, *convertModelResponsePolicyRuleToAPI(&rule))
-	}
-	return apiRules
 }
