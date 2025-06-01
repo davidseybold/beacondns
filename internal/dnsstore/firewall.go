@@ -135,12 +135,11 @@ func (s *Store) GetFirewallRules(ctx context.Context, ids []uuid.UUID) ([]Firewa
 
 	rules := make([]FirewallRule, 0, len(m))
 	for _, item := range m {
-		rule := FirewallRule{}
-		unmarshalErr := msgpack.Unmarshal(item.Value, &rule)
+		rule, unmarshalErr := unmarshalFirewallRule(item.Value)
 		if unmarshalErr != nil {
 			return nil, unmarshalErr
 		}
-		rules = append(rules, rule)
+		rules = append(rules, *rule)
 	}
 
 	return rules, nil

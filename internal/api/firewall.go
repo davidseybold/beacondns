@@ -41,7 +41,7 @@ func (h *handler) CreateDomainList(c *gin.Context) {
 }
 
 func (h *handler) DeleteDomainList(c *gin.Context) {
-	id, err := getUUIDParam(c, "id")
+	id, err := getIDParam(c)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -61,7 +61,7 @@ type AddDomainsToDomainListRequest struct {
 }
 
 func (h *handler) AddDomainsToDomainList(c *gin.Context) {
-	id, err := getUUIDParam(c, "id")
+	id, err := getIDParam(c)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -87,7 +87,7 @@ type RemoveDomainsFromDomainListRequest struct {
 }
 
 func (h *handler) RemoveDomainsFromDomainList(c *gin.Context) {
-	id, err := getUUIDParam(c, "id")
+	id, err := getIDParam(c)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -109,7 +109,7 @@ func (h *handler) RemoveDomainsFromDomainList(c *gin.Context) {
 }
 
 func (h *handler) GetDomainList(c *gin.Context) {
-	id, err := getUUIDParam(c, "id")
+	id, err := getIDParam(c)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -133,7 +133,7 @@ type ListDomainListDomainsResponse struct {
 }
 
 func (h *handler) ListDomainListDomains(c *gin.Context) {
-	id, err := getUUIDParam(c, "id")
+	id, err := getIDParam(c)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -176,6 +176,7 @@ func (h *handler) ListDomainLists(c *gin.Context) {
 }
 
 type CreateFirewallRuleRequest struct {
+	Name              string             `json:"name"                        binding:"required"`
 	DomainListID      uuid.UUID          `json:"domainListId"                binding:"required"`
 	Action            string             `json:"action"                      binding:"required"`
 	BlockResponseType *string            `json:"blockResponseType,omitempty"`
@@ -191,6 +192,7 @@ func (h *handler) CreateFirewallRule(c *gin.Context) {
 	}
 
 	rule, err := h.firewallService.CreateFirewallRule(c, &model.FirewallRule{
+		Name:              req.Name,
 		DomainListID:      req.DomainListID,
 		Action:            getFirewallRuleAction(req.Action),
 		BlockResponseType: getFirewallRuleBlockResponseType(req.BlockResponseType),
@@ -206,7 +208,7 @@ func (h *handler) CreateFirewallRule(c *gin.Context) {
 }
 
 func (h *handler) DeleteFirewallRule(c *gin.Context) {
-	id, err := getUUIDParam(c, "id")
+	id, err := getIDParam(c)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -222,7 +224,7 @@ func (h *handler) DeleteFirewallRule(c *gin.Context) {
 }
 
 func (h *handler) GetFirewallRule(c *gin.Context) {
-	id, err := getUUIDParam(c, "id")
+	id, err := getIDParam(c)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -259,6 +261,7 @@ func (h *handler) ListFirewallRules(c *gin.Context) {
 }
 
 type UpdateFirewallRuleRequest struct {
+	Name              string             `json:"name"                        binding:"required"`
 	Action            string             `json:"action"                      binding:"required"`
 	DomainListID      uuid.UUID          `json:"domainListId"                binding:"required"`
 	BlockResponseType *string            `json:"blockResponseType,omitempty"`
@@ -267,7 +270,7 @@ type UpdateFirewallRuleRequest struct {
 }
 
 func (h *handler) UpdateFirewallRule(c *gin.Context) {
-	id, err := getUUIDParam(c, "id")
+	id, err := getIDParam(c)
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -281,6 +284,7 @@ func (h *handler) UpdateFirewallRule(c *gin.Context) {
 
 	rule, err := h.firewallService.UpdateFirewallRule(c, &model.FirewallRule{
 		ID:                id,
+		Name:              req.Name,
 		DomainListID:      req.DomainListID,
 		Action:            getFirewallRuleAction(req.Action),
 		BlockResponseType: getFirewallRuleBlockResponseType(req.BlockResponseType),

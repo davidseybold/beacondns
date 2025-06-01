@@ -59,6 +59,7 @@ func main() {
 	}
 }
 
+//nolint:funlen // this is a long function but is mainly creating dependencies.
 func start(ctx context.Context, w io.Writer) error {
 	var err error
 

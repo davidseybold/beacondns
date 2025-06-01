@@ -137,12 +137,12 @@ func translateGinBindingError(err error) error {
 	return beaconerr.ErrInvalidArgument(fmt.Sprintf("invalid %s", field), field)
 }
 
-func getUUIDParam(c *gin.Context, paramName string) (uuid.UUID, error) {
-	param := c.Param(paramName)
+func getIDParam(c *gin.Context) (uuid.UUID, error) {
+	param := c.Param("id")
 
 	id, err := uuid.Parse(param)
 	if err != nil {
-		return uuid.Nil, beaconerr.ErrInvalidArgument("invalid "+paramName, paramName)
+		return uuid.Nil, beaconerr.ErrInvalidArgument("invalid parameter", "id")
 	}
 
 	return id, nil

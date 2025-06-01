@@ -6,9 +6,10 @@ import (
 
 	"github.com/coredns/coredns/plugin"
 	"github.com/coredns/coredns/request"
+	"github.com/miekg/dns"
+
 	"github.com/davidseybold/beacondns/internal/dnsstore"
 	"github.com/davidseybold/beacondns/internal/model"
-	"github.com/miekg/dns"
 )
 
 func (b *BeaconFirewall) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
@@ -41,10 +42,13 @@ func (b *BeaconFirewall) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *
 	}
 
 	return plugin.NextOrFailure(b.Name(), b.Next, ctx, w, r)
-
 }
 
-func (b *BeaconFirewall) blockResponse(state request.Request, w dns.ResponseWriter, rule *dnsstore.FirewallRule) (int, error) {
+func (b *BeaconFirewall) blockResponse(
+	state request.Request,
+	w dns.ResponseWriter,
+	rule *dnsstore.FirewallRule,
+) (int, error) {
 	msg := new(dns.Msg)
 	msg.Authoritative, msg.RecursionAvailable, msg.Compress = true, false, true
 

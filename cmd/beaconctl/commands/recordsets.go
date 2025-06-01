@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"strconv"
+	"strings"
 
 	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
@@ -57,7 +58,7 @@ var createRecordCmd = &cobra.Command{
 	Use:   "create [name]",
 	Short: "Create a new resource record set",
 	Long: `Create a new resource record set in a zone.
-Example: beaconctl records create www.example.com --zone-id 123 --type A --ttl 300 --value 192.0.2.1`,
+Example: beaconctl records create www.example.com --zone-id 123 --type A --ttl 300 --values 192.0.2.1`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		config, err := loadConfig()
@@ -80,21 +81,24 @@ Example: beaconctl records create www.example.com --zone-id 123 --type A --ttl 3
 			return err
 		}
 
-		value, err := cmd.Flags().GetString("value")
+		values, err := cmd.Flags().GetStringSlice("values")
 		if err != nil {
 			return err
 		}
 
 		name := args[0]
 
+		resourceRecords := make([]client.ResourceRecord, len(values))
+		for i, value := range values {
+			resourceRecords[i] = client.ResourceRecord{Value: value}
+		}
+
 		c := client.New(config.Host)
 		rrSet, err := c.UpsertResourceRecordSet(context.Background(), zoneID, client.ResourceRecordSet{
-			Name: name,
-			Type: recordType,
-			TTL:  ttl,
-			ResourceRecords: []client.ResourceRecord{
-				{Value: value},
-			},
+			Name:            name,
+			Type:            recordType,
+			TTL:             ttl,
+			ResourceRecords: resourceRecords,
 		})
 		if err != nil {
 			return err
@@ -102,7 +106,7 @@ Example: beaconctl records create www.example.com --zone-id 123 --type A --ttl 3
 
 		table := tablewriter.NewWriter(os.Stdout)
 		table.Header([]string{"ZONE ID", "NAME", "TYPE", "TTL", "VALUE"})
-		_ = table.Append([]string{zoneID, rrSet.Name, rrSet.Type, strconv.Itoa(int(rrSet.TTL)), value})
+		_ = table.Append([]string{zoneID, rrSet.Name, rrSet.Type, strconv.Itoa(int(rrSet.TTL)), strings.Join(values, ", ")})
 		return table.Render()
 	},
 }
@@ -186,19 +190,19 @@ func init() {
 
 	createRecordFlags := []flagFunc{
 		zoneIDFlag(),
-		typeFlag(true),
+		recordTypeFlag(true),
 		ttlFlag(false),
-		valueFlag(true),
+		valuesFlag(true),
 	}
 
 	deleteRecordFlags := []flagFunc{
 		zoneIDFlag(),
-		typeFlag(true),
+		recordTypeFlag(true),
 	}
 
 	getRecordFlags := []flagFunc{
 		zoneIDFlag(),
-		typeFlag(true),
+		recordTypeFlag(true),
 	}
 
 	addFlags(listRecordsFlags, listRecordsCmd)
@@ -208,4 +212,38 @@ func init() {
 
 	recordsCmd.AddCommand(listRecordsCmd, createRecordCmd, deleteRecordCmd, getRecordCmd)
 	rootCmd.AddCommand(recordsCmd)
+}
+
+func zoneIDFlag() flagFunc {
+	return func(cmd *cobra.Command) {
+		cmd.Flags().StringP("zone-id", "z", "", "ID of the zone")
+		_ = cmd.MarkFlagRequired("zone-id")
+	}
+}
+
+func recordTypeFlag(required bool) flagFunc {
+	return func(cmd *cobra.Command) {
+		cmd.Flags().String("type", "", "Type of the record (e.g., A, AAAA, CNAME, MX)")
+		if required {
+			_ = cmd.MarkFlagRequired("type")
+		}
+	}
+}
+
+func ttlFlag(required bool) flagFunc {
+	return func(cmd *cobra.Command) {
+		cmd.Flags().Uint32("ttl", defaultTTL, "Time to live in seconds")
+		if required {
+			_ = cmd.MarkFlagRequired("ttl")
+		}
+	}
+}
+
+func valuesFlag(required bool) flagFunc {
+	return func(cmd *cobra.Command) {
+		cmd.Flags().StringSlice("values", []string{}, "Values of the record")
+		if required {
+			_ = cmd.MarkFlagRequired("values")
+		}
+	}
 }

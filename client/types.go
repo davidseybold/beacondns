@@ -41,7 +41,8 @@ type upsertResourceRecordSetRequest struct {
 }
 
 type CreateFirewallRuleRequest struct {
-	DomainListID      string             `json:"domainListId"`
+	Name              string             `json:"name"`
+	DomainListID      uuid.UUID          `json:"domainListId"`
 	Action            string             `json:"action"`
 	BlockResponseType *string            `json:"blockResponseType,omitempty"`
 	BlockResponse     *ResourceRecordSet `json:"blockResponse,omitempty"`
@@ -63,6 +64,7 @@ type getFirewallRulesResponse struct {
 }
 
 type UpdateFirewallRuleRequest struct {
+	Name              string             `json:"name"`
 	DomainListID      uuid.UUID          `json:"domainListId"`
 	Action            string             `json:"action"`
 	BlockResponseType *string            `json:"blockResponseType,omitempty"`
