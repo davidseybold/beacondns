@@ -10,6 +10,7 @@ type KVStore interface {
 	Get(ctx context.Context, key string, opts ...Option) ([]Item, error)
 	Put(ctx context.Context, key string, value []byte, opts ...Option) error
 	Delete(ctx context.Context, key string, opts ...Option) error
+	GetMany(ctx context.Context, keys []string, opts ...Option) ([]Item, error)
 	Watch(ctx context.Context, key string, opts ...Option) (<-chan Event, error)
 	Close() error
 	Txn(ctx context.Context) Transaction

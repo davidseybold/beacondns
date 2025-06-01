@@ -68,3 +68,18 @@ func convertModelFirewallRuleToAPI(rule *model.FirewallRule) *FirewallRule {
 		Priority:          rule.Priority,
 	}
 }
+
+func getFirewallRuleAction(action string) model.FirewallRuleAction {
+	upper := strings.ToUpper(action)
+	return model.FirewallRuleAction(upper)
+}
+
+func getFirewallRuleBlockResponseType(blockResponseType *string) *model.FirewallRuleBlockResponseType {
+	if blockResponseType == nil {
+		return nil
+	}
+
+	upper := strings.ToUpper(*blockResponseType)
+	t := model.FirewallRuleBlockResponseType(upper)
+	return &t
+}

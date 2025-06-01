@@ -42,6 +42,10 @@ run-resolver: build-resolver
 	@echo ">> Running resolver..."
 	BEACON_ENV=local $(RESOLVER_BIN)
 
+run-local:
+	@echo ">> Running local..."
+	docker compose -f local/docker-compose.yaml up --build
+
 run-e2e-test:
 	@echo ">> Running e2e test..."
 	$(GO) test -v ./tests/e2e_test.go

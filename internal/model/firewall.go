@@ -20,23 +20,23 @@ type DomainList struct {
 type FirewallRuleAction string
 
 const (
-	FirewallRuleActionAllow    FirewallRuleAction = "allow"
-	FirewallRuleActionAlert    FirewallRuleAction = "alert"
-	FirewallRuleActionOverride FirewallRuleAction = "override"
+	FirewallRuleActionAllow FirewallRuleAction = "ALLOW"
+	FirewallRuleActionAlert FirewallRuleAction = "ALERT"
+	FirewallRuleActionBlock FirewallRuleAction = "BLOCK"
 )
 
 var ValidFirewallRuleActions = map[FirewallRuleAction]struct{}{
-	FirewallRuleActionAllow:    {},
-	FirewallRuleActionAlert:    {},
-	FirewallRuleActionOverride: {},
+	FirewallRuleActionAllow: {},
+	FirewallRuleActionAlert: {},
+	FirewallRuleActionBlock: {},
 }
 
 type FirewallRuleBlockResponseType string
 
 const (
-	FirewallRuleBlockResponseTypeNXDOMAIN FirewallRuleBlockResponseType = "nxdomain"
-	FirewallRuleBlockResponseTypeNODATA   FirewallRuleBlockResponseType = "nodata"
-	FirewallRuleBlockResponseTypeOverride FirewallRuleBlockResponseType = "override"
+	FirewallRuleBlockResponseTypeNXDOMAIN FirewallRuleBlockResponseType = "NXDOMAIN"
+	FirewallRuleBlockResponseTypeNODATA   FirewallRuleBlockResponseType = "NODATA"
+	FirewallRuleBlockResponseTypeOverride FirewallRuleBlockResponseType = "OVERRIDE"
 )
 
 var ValidFirewallRuleBlockResponseTypes = map[FirewallRuleBlockResponseType]struct{}{

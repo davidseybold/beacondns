@@ -13,7 +13,7 @@ import (
 )
 
 type FirewallReader interface {
-	GetFirewallRule(ctx context.Context, id uuid.UUID) (*FirewallRule, error)
+	GetFirewallRules(ctx context.Context, ids []uuid.UUID) ([]FirewallRule, error)
 	GetFirewallRuleMappings(ctx context.Context) ([]FirewallRuleMapping, error)
 	SubscribeToFirewallRuleEvents(ctx context.Context) (<-chan FirewallRuleMappingEvent, error)
 }
@@ -122,13 +122,28 @@ func (s *Store) GetFirewallRuleMappings(ctx context.Context) ([]FirewallRuleMapp
 	return rules, nil
 }
 
-func (s *Store) GetFirewallRule(ctx context.Context, id uuid.UUID) (*FirewallRule, error) {
-	m, err := s.kvstore.Get(ctx, createFirewallRuleKey(id))
+func (s *Store) GetFirewallRules(ctx context.Context, ids []uuid.UUID) ([]FirewallRule, error) {
+	keys := make([]string, 0, len(ids))
+	for _, id := range ids {
+		keys = append(keys, createFirewallRuleKey(id))
+	}
+
+	m, err := s.kvstore.GetMany(ctx, keys)
 	if err != nil {
 		return nil, err
 	}
 
-	return unmarshalFirewallRule(m[0].Value)
+	rules := make([]FirewallRule, 0, len(m))
+	for _, item := range m {
+		rule := FirewallRule{}
+		unmarshalErr := msgpack.Unmarshal(item.Value, &rule)
+		if unmarshalErr != nil {
+			return nil, unmarshalErr
+		}
+		rules = append(rules, rule)
+	}
+
+	return rules, nil
 }
 
 func (s *Store) AddDomainsToFirewallRule(ctx context.Context, ruleID uuid.UUID, domains []string) error {

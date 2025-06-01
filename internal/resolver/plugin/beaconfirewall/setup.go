@@ -1,11 +1,13 @@
 package beaconfirewall
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/core/dnsserver"
 	"github.com/coredns/coredns/plugin"
+	"github.com/google/uuid"
 
 	"github.com/davidseybold/beacondns/internal/db/kvstore"
 	"github.com/davidseybold/beacondns/internal/dnsstore"
@@ -45,7 +47,25 @@ func (b *BeaconFirewall) OnStartup() error {
 
 	b.store = dnsstore.New(etcdClient)
 
+	watchCtx, watchCancel := context.WithCancel(context.Background())
+
+	ruleEventsCh, err := b.store.SubscribeToFirewallRuleEvents(watchCtx)
+	if err != nil {
+		watchCancel()
+		return fmt.Errorf("error subscribing to firewall rule mapping events: %w", err)
+	}
+
+	go b.listenForRuleChanges(watchCtx, ruleEventsCh)
+
+	err = b.loadRules()
+	if err != nil {
+		watchCancel()
+		return fmt.Errorf("error loading rules: %w", err)
+	}
+
 	b.close = func() error {
+		watchCancel()
+
 		if storeErr := etcdClient.Close(); storeErr != nil {
 			return fmt.Errorf("error closing etcd client: %w", storeErr)
 		}
@@ -72,7 +92,7 @@ func beaconParse(c *caddy.Controller) (*BeaconFirewall, error) {
 
 func parseAttributes(c *caddy.Controller) (*BeaconFirewall, error) {
 	beacon := &BeaconFirewall{
-		ruleLookup: NewDNTrie[ruleMeta](),
+		ruleLookup: NewDNTrie[uuid.UUID](),
 	}
 
 	config := Config{}

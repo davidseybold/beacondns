@@ -190,16 +190,10 @@ func (h *handler) CreateFirewallRule(c *gin.Context) {
 		return
 	}
 
-	var blockResponseType *model.FirewallRuleBlockResponseType
-	if req.BlockResponseType != nil {
-		t := model.FirewallRuleBlockResponseType(*req.BlockResponseType)
-		blockResponseType = &t
-	}
-
 	rule, err := h.firewallService.CreateFirewallRule(c, &model.FirewallRule{
 		DomainListID:      req.DomainListID,
-		Action:            model.FirewallRuleAction(req.Action),
-		BlockResponseType: blockResponseType,
+		Action:            getFirewallRuleAction(req.Action),
+		BlockResponseType: getFirewallRuleBlockResponseType(req.BlockResponseType),
 		BlockResponse:     convertAPIResourceRecordSetToModel(req.BlockResponse),
 		Priority:          req.Priority,
 	})
@@ -262,4 +256,41 @@ func (h *handler) ListFirewallRules(c *gin.Context) {
 	c.JSON(http.StatusOK, ListFirewallRulesResponse{
 		Rules: apiRules,
 	})
+}
+
+type UpdateFirewallRuleRequest struct {
+	Action            string             `json:"action"                      binding:"required"`
+	DomainListID      uuid.UUID          `json:"domainListId"                binding:"required"`
+	BlockResponseType *string            `json:"blockResponseType,omitempty"`
+	BlockResponse     *ResourceRecordSet `json:"blockResponse,omitempty"`
+	Priority          uint               `json:"priority"                    binding:"required"`
+}
+
+func (h *handler) UpdateFirewallRule(c *gin.Context) {
+	id, err := getUUIDParam(c, "id")
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+
+	var req UpdateFirewallRuleRequest
+	if err = c.ShouldBindJSON(&req); err != nil {
+		h.handleError(c, err)
+		return
+	}
+
+	rule, err := h.firewallService.UpdateFirewallRule(c, &model.FirewallRule{
+		ID:                id,
+		DomainListID:      req.DomainListID,
+		Action:            getFirewallRuleAction(req.Action),
+		BlockResponseType: getFirewallRuleBlockResponseType(req.BlockResponseType),
+		BlockResponse:     convertAPIResourceRecordSetToModel(req.BlockResponse),
+		Priority:          req.Priority,
+	})
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, convertModelFirewallRuleToAPI(rule))
 }

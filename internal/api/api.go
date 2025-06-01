@@ -62,6 +62,7 @@ func NewHTTPHandler(
 		g.GET("/domain-lists/:id", handler.GetDomainList)
 		g.GET("/domain-lists", handler.ListDomainLists)
 		g.POST("/rules", handler.CreateFirewallRule)
+		g.POST("/rules/:id", handler.UpdateFirewallRule)
 		g.DELETE("/rules/:id", handler.DeleteFirewallRule)
 		g.GET("/rules/:id", handler.GetFirewallRule)
 		g.GET("/rules", handler.ListFirewallRules)

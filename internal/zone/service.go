@@ -13,7 +13,7 @@ import (
 
 const (
 	delegationSetSize = 2
-	hostmasterEmail   = "hostmaster.beacondns.org"
+	hostmasterEmail   = "hostmaster.beacondns.org."
 
 	soaSerial     = 1
 	soaRefresh    = 7200    // 2 hours
@@ -65,7 +65,7 @@ func (d *DefaultService) CreateZone(ctx context.Context, name string) (*model.Zo
 
 	zone := model.NewZone(zoneName)
 
-	nameServerNames := []string{"ns00.beacondns.org.", "ns01.beacondns.org."}
+	nameServerNames := []string{"ns1.beacondns.org.", "ns2.beacondns.org."}
 
 	primaryNS := nameServerNames[0]
 

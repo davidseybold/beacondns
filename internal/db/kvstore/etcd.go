@@ -65,6 +65,31 @@ func (e *EtcdClient) Get(ctx context.Context, key string, opts ...Option) ([]Ite
 	return items, nil
 }
 
+func (e *EtcdClient) GetMany(ctx context.Context, keys []string, opts ...Option) ([]Item, error) {
+	etcdOpts := applyOptions(opts...)
+
+	tx := e.etcdClient.Txn(ctx)
+
+	ops := make([]clientv3.Op, 0, len(keys))
+	for _, key := range keys {
+		ops = append(ops, clientv3.OpGet(key, etcdOpts...))
+	}
+
+	resp, err := tx.Then(ops...).Commit()
+	if err != nil {
+		return nil, err
+	}
+
+	items := make([]Item, 0)
+	for _, resp := range resp.Responses {
+		for _, kv := range resp.GetResponseRange().Kvs {
+			items = append(items, Item{Key: string(kv.Key), Value: kv.Value})
+		}
+	}
+
+	return items, nil
+}
+
 func (e *EtcdClient) Put(ctx context.Context, key string, value []byte, opts ...Option) error {
 	etcdOpts := applyOptions(opts...)
 
