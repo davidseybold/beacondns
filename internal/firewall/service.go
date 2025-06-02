@@ -23,7 +23,7 @@ type Service interface {
 	CreateUnmanagedDomainList(ctx context.Context, name string, domains []string) (*model.DomainListInfo, error)
 	CreateManagedDomainList(ctx context.Context, name string, sourceURL string) (*model.DomainListInfo, error)
 	DeleteDomainList(ctx context.Context, id uuid.UUID) error
-	RefreshManagedDomainList(ctx context.Context, id uuid.UUID) error
+	RefreshManagedDomainList(ctx context.Context, id uuid.UUID) (*model.DomainListInfo, error)
 	AddDomainsToDomainList(ctx context.Context, id uuid.UUID, domains []string) error
 	RemoveDomainsFromDomainList(ctx context.Context, id uuid.UUID, domains []string) error
 	GetDomainList(ctx context.Context, id uuid.UUID) (*model.DomainListInfo, error)
@@ -157,23 +157,25 @@ func (d *DefaultService) CreateManagedDomainList(
 	return info, nil
 }
 
-func (d *DefaultService) RefreshManagedDomainList(ctx context.Context, id uuid.UUID) error {
+func (d *DefaultService) RefreshManagedDomainList(ctx context.Context, id uuid.UUID) (*model.DomainListInfo, error) {
 	info, err := d.repReg.GetFirewallRepository().GetDomainListInfo(ctx, id)
 	if err != nil {
-		return beaconerr.ErrInternalError("failed to get domain list", err)
+		return nil, beaconerr.ErrInternalError("failed to get domain list", err)
 	}
 
 	if !info.IsManaged {
-		return beaconerr.ErrDomainListInvalidState("cannot refresh unmanaged domain list")
+		return nil, beaconerr.ErrDomainListInvalidState("cannot refresh unmanaged domain list")
 	}
 
 	domains, err := fetchDomainListFromSourceURL(ctx, *info.SourceURL)
 	if err != nil {
-		return beaconerr.ErrInternalError("failed to fetch domain list from source URL", err)
+		return nil, beaconerr.ErrInternalError("failed to fetch domain list from source URL", err)
 	}
 
+	var updatedInfo *model.DomainListInfo
 	err = d.repReg.InTx(ctx, func(ctx context.Context, r repository.Registry) error {
-		txErr := r.GetFirewallRepository().OverwriteDomainListDomains(ctx, id, domains)
+		var txErr error
+		updatedInfo, txErr = r.GetFirewallRepository().OverwriteDomainListDomains(ctx, id, domains)
 		if txErr != nil {
 			return fmt.Errorf("failed to overwrite domain list domains: %w", txErr)
 		}
@@ -186,10 +188,10 @@ func (d *DefaultService) RefreshManagedDomainList(ctx context.Context, id uuid.U
 		return nil
 	})
 	if err != nil {
-		return beaconerr.ErrInternalError("failed to refresh domain list", err)
+		return nil, beaconerr.ErrInternalError("failed to refresh domain list", err)
 	}
 
-	return nil
+	return updatedInfo, nil
 }
 
 func (d *DefaultService) CreateFirewallRule(

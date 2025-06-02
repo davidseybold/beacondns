@@ -60,12 +60,7 @@ type FirewallRuleMappingEvent struct {
 func (s *Store) PutFirewallRule(ctx context.Context, rule *FirewallRule, domains []string) error {
 	// Create batches of 100 domains to avoid overwhelming the transaction
 	batchSize := 100
-	domainBatches := make([][]string, 0, (len(domains)+batchSize-1)/batchSize)
-
-	for i := 0; i < len(domains); i += batchSize {
-		end := min(i+batchSize, len(domains))
-		domainBatches = append(domainBatches, domains[i:end])
-	}
+	domainBatches := createBatches(domains, batchSize)
 
 	ruleKey := createFirewallRuleKey(rule.ID)
 	ruleData, err := marshalFirewallRule(rule)
@@ -241,25 +236,54 @@ func (s *Store) SubscribeToFirewallRuleEvents(ctx context.Context) (<-chan Firew
 }
 
 func (s *Store) RefreshDomainsForRules(ctx context.Context, ruleIDs []uuid.UUID, domains []string) error {
-	tx := s.kvstore.Txn(ctx)
+
+	domainBatches := createBatches(domains, 100)
 
 	for _, ruleID := range ruleIDs {
-		// Delete all mappings for the rule
-		tx.Delete(createFirewallRuleMappingPrefix(ruleID), kvstore.WithPrefix())
 
-		for _, domain := range domains {
-			domainKey := createFirewallRuleMappingKey(ruleID, domain)
-			mapping := &FirewallRuleMapping{
-				RuleID: ruleID,
-				Domain: domain,
+		// Delete all mappings for the rule
+		err := s.kvstore.Delete(ctx, createFirewallRuleMappingPrefix(ruleID), kvstore.WithPrefix())
+		if err != nil {
+			return err
+		}
+
+		for _, domain := range domainBatches {
+			tx := s.kvstore.Txn(ctx)
+			for _, domain := range domain {
+				domainKey := createFirewallRuleMappingKey(ruleID, domain)
+				mapping := &FirewallRuleMapping{
+					RuleID: ruleID,
+					Domain: domain,
+				}
+				mappingData, marshalErr := msgpack.Marshal(mapping)
+				if marshalErr != nil {
+					return marshalErr
+				}
+				tx.Put(domainKey, mappingData)
 			}
-			mappingData, marshalErr := msgpack.Marshal(mapping)
-			if marshalErr != nil {
-				return marshalErr
+
+			err := tx.Commit()
+			if err != nil {
+				return err
 			}
-			tx.Put(domainKey, mappingData)
 		}
 	}
 
-	return tx.Commit()
+	return nil
+}
+
+func createBatches[T any](items []T, batchSize int) [][]T {
+	batches := make([][]T, 0, (len(items)+batchSize-1)/batchSize)
+
+	for i := 0; i < len(items); i += batchSize {
+		end := min(i+batchSize, len(items))
+		batches = append(batches, items[i:end])
+	}
+
+	for i := 0; i < len(items); i += batchSize {
+		end := min(i+batchSize, len(items))
+		batches = append(batches, items[i:end])
+	}
+
+	return batches
 }

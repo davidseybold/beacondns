@@ -56,6 +56,7 @@ func NewHTTPHandler(
 	{
 		g := r.Group("/v1/firewall")
 		g.POST("/domain-lists", handler.CreateDomainList)
+		g.POST("/domain-lists/:id/refresh", handler.RefreshDomainList)
 		g.DELETE("/domain-lists/:id", handler.DeleteDomainList)
 		g.GET("/domain-lists/:id/domains", handler.ListDomainListDomains)
 		g.POST("/domain-lists/:id/domains", handler.AddDomainsToDomainList)

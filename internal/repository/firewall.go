@@ -42,6 +42,11 @@ const (
 		AND domain = ANY($2)
 	`
 
+	deleteAllDomainListDomainsQuery = `
+		DELETE FROM domain_list_domains
+		WHERE domain_list_id = $1
+	`
+
 	deleteDomainListQuery = `
 		DELETE FROM domain_lists
 		WHERE id = $1
@@ -117,7 +122,7 @@ type FirewallRepository interface {
 	GetDomainListInfo(ctx context.Context, id uuid.UUID) (*model.DomainListInfo, error)
 	GetDomainListDomains(ctx context.Context, id uuid.UUID) ([]string, error)
 	ListDomainLists(ctx context.Context) ([]model.DomainListInfo, error)
-	OverwriteDomainListDomains(ctx context.Context, id uuid.UUID, domains []string) error
+	OverwriteDomainListDomains(ctx context.Context, id uuid.UUID, domains []string) (*model.DomainListInfo, error)
 
 	AddDomainsToDomainList(ctx context.Context, id uuid.UUID, domains []string) error
 	RemoveDomainsFromDomainList(ctx context.Context, id uuid.UUID, domains []string) error
@@ -419,16 +424,21 @@ func (p *PostgresFirewallRepository) OverwriteDomainListDomains(
 	ctx context.Context,
 	id uuid.UUID,
 	domains []string,
-) error {
-	_, err := p.db.Exec(ctx, deleteDomainListDomainsQuery, id)
+) (*model.DomainListInfo, error) {
+	_, err := p.db.Exec(ctx, deleteAllDomainListDomainsQuery, id)
 	if err != nil {
-		return handleError(err, "failed to execute delete domain list domains query: %w", err)
+		return nil, handleError(err, "failed to execute delete domain list domains query: %w", err)
 	}
 
 	err = p.insertDomainListDomains(ctx, id, domains)
 	if err != nil {
-		return handleError(err, "failed to execute insert domain list domains query: %w", err)
+		return nil, handleError(err, "failed to execute insert domain list domains query: %w", err)
 	}
 
-	return nil
+	info, err := p.GetDomainListInfo(ctx, id)
+	if err != nil {
+		return nil, handleError(err, "failed to get domain list info: %w", err)
+	}
+
+	return info, nil
 }

@@ -259,3 +259,23 @@ func (h *handler) UpdateFirewallRule(c *gin.Context) {
 
 	c.JSON(http.StatusOK, convertModelFirewallRuleToAPI(rule))
 }
+
+func (h *handler) RefreshDomainList(c *gin.Context) {
+	id, err := getIDParam(c)
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+
+	info, err := h.firewallService.RefreshManagedDomainList(c, id)
+	if err != nil {
+		h.handleError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, DomainList{
+		ID:          info.ID,
+		Name:        info.Name,
+		DomainCount: info.DomainCount,
+	})
+}
