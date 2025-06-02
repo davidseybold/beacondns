@@ -73,13 +73,17 @@ type UpdateFirewallRuleRequest struct {
 }
 
 type CreateDomainListRequest struct {
-	Name    string   `json:"name"`
-	Domains []string `json:"domains"`
+	Name      string   `json:"name"`
+	IsManaged bool     `json:"isManaged"`
+	SourceURL *string  `json:"sourceUrl,omitempty"`
+	Domains   []string `json:"domains"`
 }
 
 type DomainList struct {
 	ID          uuid.UUID `json:"id"`
 	Name        string    `json:"name"`
+	IsManaged   bool      `json:"isManaged"`
+	SourceURL   *string   `json:"sourceUrl,omitempty"`
 	DomainCount int       `json:"domainCount"`
 }
 

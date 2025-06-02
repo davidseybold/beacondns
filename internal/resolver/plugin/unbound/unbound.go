@@ -1,3 +1,4 @@
+// Package unbound is a plugin that resolves requests using libunbound.
 // Copied from https://github.com/coredns/unbound
 package unbound
 
@@ -36,7 +37,7 @@ var options = map[string]string{
 func New() *Unbound {
 	udp := unbound.New()
 	tcp := unbound.New()
-	tcp.SetOption("tcp-upstream:", "yes")
+	_ = tcp.SetOption("tcp-upstream:", "yes")
 
 	u := &Unbound{u: udp, t: tcp}
 
@@ -61,31 +62,31 @@ func (u *Unbound) setOption(k, v string) error {
 	// Add ":" as unbound expects it
 	k += ":"
 	// Set for both udp and tcp handlers, return the error from the latter.
-	u.u.SetOption(k, v)
+	_ = u.u.SetOption(k, v)
 	err := u.t.SetOption(k, v)
 	if err != nil {
-		return fmt.Errorf("failed to set option %q with value %q: %s", k, v, err)
+		return fmt.Errorf("failed to set option %q with value %q: %w", k, v, err)
 	}
 	return nil
 }
 
-// config reads the file f and sets unbound configuration
+// config reads the file f and sets unbound configuration.
 func (u *Unbound) config(f string) error {
 	var err error
 
 	err = u.u.Config(f)
 	if err != nil {
-		return fmt.Errorf("failed to read config file (%s) UDP context: %s", f, err)
+		return fmt.Errorf("failed to read config file (%s) UDP context: %w", f, err)
 	}
 
 	err = u.t.Config(f)
 	if err != nil {
-		return fmt.Errorf("failed to read config file (%s) TCP context: %s", f, err)
+		return fmt.Errorf("failed to read config file (%s) TCP context: %w", f, err)
 	}
 	return nil
 }
 
-func (u *Unbound) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
+func (u *Unbound) ServeDNS(_ context.Context, w dns.ResponseWriter, r *dns.Msg) (int, error) {
 	state := request.Request{W: w, Req: r}
 
 	var (
@@ -118,7 +119,11 @@ func (u *Unbound) ServeDNS(ctx context.Context, w dns.ResponseWriter, r *dns.Msg
 	}
 
 	res.AnswerPacket.Id = r.Id
-	w.WriteMsg(res.AnswerPacket)
+	err = w.WriteMsg(res.AnswerPacket)
+	if err != nil {
+		return dns.RcodeServerFailure, err
+	}
+
 	return 0, nil
 }
 

@@ -2,7 +2,6 @@ package commands
 
 import (
 	"context"
-	"os"
 	"strconv"
 	"strings"
 
@@ -38,7 +37,7 @@ var listRecordsCmd = &cobra.Command{
 			return err
 		}
 
-		table := tablewriter.NewWriter(os.Stdout)
+		table := tablewriter.NewWriter(cmd.OutOrStdout())
 		table.Header([]string{"NAME", "TYPE", "TTL", "VALUES"})
 		for _, rrset := range rrSets {
 			values := ""
@@ -104,9 +103,11 @@ Example: beaconctl records create www.example.com --zone-id 123 --type A --ttl 3
 			return err
 		}
 
-		table := tablewriter.NewWriter(os.Stdout)
+		table := tablewriter.NewWriter(cmd.OutOrStdout())
 		table.Header([]string{"ZONE ID", "NAME", "TYPE", "TTL", "VALUE"})
-		_ = table.Append([]string{zoneID, rrSet.Name, rrSet.Type, strconv.Itoa(int(rrSet.TTL)), strings.Join(values, ", ")})
+		_ = table.Append(
+			[]string{zoneID, rrSet.Name, rrSet.Type, strconv.Itoa(int(rrSet.TTL)), strings.Join(values, ", ")},
+		)
 		return table.Render()
 	},
 }
@@ -176,7 +177,7 @@ Example: beaconctl records get www.example.com --zone-id 123 --type A`,
 			return err
 		}
 
-		table := tablewriter.NewWriter(os.Stdout)
+		table := tablewriter.NewWriter(cmd.OutOrStdout())
 		table.Header([]string{"NAME", "TYPE", "TTL", "VALUES"})
 		_ = table.Append([]string{rrSet.Name, rrSet.Type, strconv.Itoa(int(rrSet.TTL)), rrSet.ResourceRecords[0].Value})
 		return table.Render()

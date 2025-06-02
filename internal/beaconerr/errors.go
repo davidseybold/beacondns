@@ -15,6 +15,7 @@ const (
 	ErrorCodeNoSuchFirewallRule       ErrorCode = "NoSuchFirewallRule"
 	ErrorCodeHostedZoneNotEmpty       ErrorCode = "HostedZoneNotEmpty"
 	ErrorCodeDomainExistsInDomainList ErrorCode = "DomainExistsInDomainList"
+	ErrorCodeDomainListInvalidState   ErrorCode = "DomainListInvalidState"
 	ErrorCodeInvalidArgument          ErrorCode = "InvalidArgument"
 	ErrorCodeInternalError            ErrorCode = "InternalError"
 )
@@ -265,6 +266,20 @@ func (e *DomainExistsInDomainListError) Unwrap() error {
 func ErrDomainExistsInDomainList(message string) *DomainExistsInDomainListError {
 	return &DomainExistsInDomainListError{
 		ConflictError: newConflictError(ErrorCodeDomainExistsInDomainList, message),
+	}
+}
+
+type DomainListInvalidStateError struct {
+	*BadRequestError
+}
+
+func (e *DomainListInvalidStateError) Unwrap() error {
+	return e.BadRequestError
+}
+
+func ErrDomainListInvalidState(message string) *DomainListInvalidStateError {
+	return &DomainListInvalidStateError{
+		BadRequestError: newBadRequestError(ErrorCodeDomainListInvalidState, message, nil),
 	}
 }
 

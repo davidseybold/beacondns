@@ -2,13 +2,13 @@ package commands
 
 import (
 	"context"
-	"os"
 	"strconv"
 
-	"github.com/davidseybold/beacondns/client"
 	"github.com/google/uuid"
 	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
+
+	"github.com/davidseybold/beacondns/client"
 )
 
 var firewallRulesCmd = &cobra.Command{
@@ -20,7 +20,7 @@ var firewallRulesCmd = &cobra.Command{
 var createFirewallRuleCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Create a new firewall rule",
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(cmd *cobra.Command, _ []string) error {
 		config, err := loadConfig()
 		if err != nil {
 			return err
@@ -104,9 +104,17 @@ var createFirewallRuleCmd = &cobra.Command{
 			return err
 		}
 
-		table := tablewriter.NewWriter(os.Stdout)
+		table := tablewriter.NewWriter(cmd.OutOrStdout())
 		table.Header([]string{"ID", "NAME", "DOMAIN LIST ID", "ACTION", "PRIORITY"})
-		table.Append([]string{rule.ID.String(), rule.Name, rule.DomainListID.String(), rule.Action, strconv.Itoa(int(rule.Priority))})
+		_ = table.Append(
+			[]string{
+				rule.ID.String(),
+				rule.Name,
+				rule.DomainListID.String(),
+				rule.Action,
+				strconv.Itoa(int(rule.Priority)),
+			},
+		)
 		return table.Render()
 	},
 }
@@ -158,9 +166,17 @@ var getFirewallRuleCmd = &cobra.Command{
 			return err
 		}
 
-		table := tablewriter.NewWriter(os.Stdout)
+		table := tablewriter.NewWriter(cmd.OutOrStdout())
 		table.Header([]string{"ID", "NAME", "DOMAIN LIST ID", "ACTION", "PRIORITY"})
-		table.Append([]string{rule.ID.String(), rule.Name, rule.DomainListID.String(), rule.Action, strconv.Itoa(int(rule.Priority))})
+		_ = table.Append(
+			[]string{
+				rule.ID.String(),
+				rule.Name,
+				rule.DomainListID.String(),
+				rule.Action,
+				strconv.Itoa(int(rule.Priority)),
+			},
+		)
 		return table.Render()
 	},
 }
@@ -168,7 +184,7 @@ var getFirewallRuleCmd = &cobra.Command{
 var listFirewallRulesCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all firewall rules",
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(cmd *cobra.Command, _ []string) error {
 		config, err := loadConfig()
 		if err != nil {
 			return err
@@ -180,10 +196,18 @@ var listFirewallRulesCmd = &cobra.Command{
 			return err
 		}
 
-		table := tablewriter.NewWriter(os.Stdout)
+		table := tablewriter.NewWriter(cmd.OutOrStdout())
 		table.Header([]string{"ID", "NAME", "DOMAIN LIST ID", "ACTION", "PRIORITY"})
 		for _, rule := range rules {
-			table.Append([]string{rule.ID.String(), rule.Name, rule.DomainListID.String(), rule.Action, strconv.Itoa(int(rule.Priority))})
+			_ = table.Append(
+				[]string{
+					rule.ID.String(),
+					rule.Name,
+					rule.DomainListID.String(),
+					rule.Action,
+					strconv.Itoa(int(rule.Priority)),
+				},
+			)
 		}
 		return table.Render()
 	},
@@ -271,9 +295,17 @@ var updateFirewallRuleCmd = &cobra.Command{
 			return err
 		}
 
-		table := tablewriter.NewWriter(os.Stdout)
+		table := tablewriter.NewWriter(cmd.OutOrStdout())
 		table.Header([]string{"ID", "NAME", "DOMAIN LIST ID", "ACTION", "PRIORITY"})
-		table.Append([]string{rule.ID.String(), rule.Name, rule.DomainListID.String(), rule.Action, strconv.Itoa(int(rule.Priority))})
+		_ = table.Append(
+			[]string{
+				rule.ID.String(),
+				rule.Name,
+				rule.DomainListID.String(),
+				rule.Action,
+				strconv.Itoa(int(rule.Priority)),
+			},
+		)
 		return table.Render()
 	},
 }
@@ -281,12 +313,17 @@ var updateFirewallRuleCmd = &cobra.Command{
 func init() {
 	createFirewallRuleCmd.Flags().String("name", "", "Name of the firewall rule")
 	createFirewallRuleCmd.Flags().String("domain-list-id", "", "ID of the domain list to apply the firewall rule to")
-	createFirewallRuleCmd.Flags().String("action", "", "Action to take when the firewall rule is triggered (block, allow, alert)")
+	createFirewallRuleCmd.Flags().
+		String("action", "", "Action to take when the firewall rule is triggered (block, allow, alert)")
 	createFirewallRuleCmd.Flags().Uint("priority", 0, "Priority of the firewall rule")
-	createFirewallRuleCmd.Flags().String("block-response-type", "", "Type of response to return when the firewall rule is triggered (nxdomain, nodata, override)")
-	createFirewallRuleCmd.Flags().StringSlice("block-response-record-values", []string{}, "Values to return when the firewall rule is triggered (nxdomain, nodata, override)")
-	createFirewallRuleCmd.Flags().Uint32("block-response-record-ttl", 0, "TTL to return when the firewall rule is triggered (nxdomain, nodata, override)")
-	createFirewallRuleCmd.Flags().String("block-response-record-type", "", "Type of response to return when the firewall rule is triggered (A, AAAA, CNAME)")
+	createFirewallRuleCmd.Flags().
+		String("block-response-type", "", "Type of response to return when the firewall rule is triggered (nxdomain, nodata, override)")
+	createFirewallRuleCmd.Flags().
+		StringSlice("block-response-record-values", []string{}, "Values to return when the firewall rule is triggered (nxdomain, nodata, override)")
+	createFirewallRuleCmd.Flags().
+		Uint32("block-response-record-ttl", 0, "TTL to return when the firewall rule is triggered (nxdomain, nodata, override)")
+	createFirewallRuleCmd.Flags().
+		String("block-response-record-type", "", "Type of response to return when the firewall rule is triggered (A, AAAA, CNAME)")
 	_ = createFirewallRuleCmd.MarkFlagRequired("name")
 	_ = createFirewallRuleCmd.MarkFlagRequired("domain-list-id")
 	_ = createFirewallRuleCmd.MarkFlagRequired("action")
@@ -294,18 +331,29 @@ func init() {
 	_ = createFirewallRuleCmd.MarkFlagRequired("block-response-type")
 
 	updateFirewallRuleCmd.Flags().String("name", "", "Name of the firewall rule")
-	updateFirewallRuleCmd.Flags().String("action", "", "Action to take when the firewall rule is triggered (block, allow, alert)")
+	updateFirewallRuleCmd.Flags().
+		String("action", "", "Action to take when the firewall rule is triggered (block, allow, alert)")
 	updateFirewallRuleCmd.Flags().Uint("priority", 0, "Priority of the firewall rule")
-	updateFirewallRuleCmd.Flags().String("block-response-type", "", "Type of response to return when the firewall rule is triggered (nxdomain, nodata, override)")
-	updateFirewallRuleCmd.Flags().StringSlice("block-response-record-values", []string{}, "Values to return when the firewall rule is triggered (nxdomain, nodata, override)")
-	updateFirewallRuleCmd.Flags().Uint32("block-response-record-ttl", 0, "TTL to return when the firewall rule is triggered (nxdomain, nodata, override)")
-	updateFirewallRuleCmd.Flags().String("block-response-record-type", "", "Type of response to return when the firewall rule is triggered (A, AAAA, CNAME)")
+	updateFirewallRuleCmd.Flags().
+		String("block-response-type", "", "Type of response to return when the firewall rule is triggered (nxdomain, nodata, override)")
+	updateFirewallRuleCmd.Flags().
+		StringSlice("block-response-record-values", []string{}, "Values to return when the firewall rule is triggered (nxdomain, nodata, override)")
+	updateFirewallRuleCmd.Flags().
+		Uint32("block-response-record-ttl", 0, "TTL to return when the firewall rule is triggered (nxdomain, nodata, override)")
+	updateFirewallRuleCmd.Flags().
+		String("block-response-record-type", "", "Type of response to return when the firewall rule is triggered (A, AAAA, CNAME)")
 
 	_ = updateFirewallRuleCmd.MarkFlagRequired("name")
 	_ = updateFirewallRuleCmd.MarkFlagRequired("action")
 	_ = updateFirewallRuleCmd.MarkFlagRequired("priority")
 	_ = updateFirewallRuleCmd.MarkFlagRequired("block-response-type")
 
-	firewallRulesCmd.AddCommand(createFirewallRuleCmd, deleteFirewallRuleCmd, getFirewallRuleCmd, listFirewallRulesCmd, updateFirewallRuleCmd)
+	firewallRulesCmd.AddCommand(
+		createFirewallRuleCmd,
+		deleteFirewallRuleCmd,
+		getFirewallRuleCmd,
+		listFirewallRulesCmd,
+		updateFirewallRuleCmd,
+	)
 	rootCmd.AddCommand(firewallRulesCmd)
 }

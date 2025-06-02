@@ -28,6 +28,7 @@ func setup(c *caddy.Controller) error {
 	return nil
 }
 
+//nolint:gocognit // This was copied from the coredns plugin.
 func unboundParse(c *caddy.Controller) (*Unbound, error) {
 	u := New()
 
@@ -58,8 +59,8 @@ func unboundParse(c *caddy.Controller) (*Unbound, error) {
 				if len(except) == 0 {
 					return nil, c.ArgErr()
 				}
-				for i := 0; i < len(except); i++ {
-					except[i] = plugin.Host(except[i]).Normalize()
+				for j := 0; j < len(except); j++ {
+					except[j] = plugin.Host(except[j]).Normalize()
 				}
 				u.except = except
 			case "option":

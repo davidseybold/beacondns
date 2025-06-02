@@ -2,6 +2,8 @@ CREATE TABLE
     domain_lists (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid (),
         name TEXT NOT NULL,
+        is_managed BOOLEAN NOT NULL DEFAULT FALSE,
+        source_url TEXT,
         created_at TIMESTAMPTZ NOT NULL DEFAULT now (),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT now ()
     );

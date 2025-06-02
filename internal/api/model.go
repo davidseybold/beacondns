@@ -1,5 +1,7 @@
 package api
 
+import "github.com/google/uuid"
+
 type ErrorResponse struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
@@ -41,8 +43,47 @@ type ResourceRecord struct {
 type FirewallRule struct {
 	ID                string             `json:"id"`
 	DomainListID      string             `json:"domainListId"`
-	Action            string             `json:"action"`
-	BlockResponseType *string            `json:"blockResponseType,omitempty"`
+	Action            string             `json:"action"                      binding:"firewallRuleAction"`
+	BlockResponseType *string            `json:"blockResponseType,omitempty" binding:"firewallRuleBlockResponseType"`
 	BlockResponse     *ResourceRecordSet `json:"blockResponse,omitempty"`
 	Priority          uint               `json:"priority"`
+}
+
+type AddDomainsToDomainListRequest struct {
+	Domains []string `json:"domains" binding:"required"`
+}
+
+type RemoveDomainsFromDomainListRequest struct {
+	Domains []string `json:"domains" binding:"required"`
+}
+
+type ListDomainListDomainsResponse struct {
+	Domains    []string `json:"domains"`
+	NextCursor string   `json:"nextCursor,omitempty"`
+}
+
+type ListDomainListsResponse struct {
+	DomainLists []DomainList `json:"domainLists"`
+}
+
+type CreateDomainListRequest struct {
+	Name      string   `json:"name"                binding:"required"`
+	IsManaged bool     `json:"isManaged"`
+	Domains   []string `json:"domains"`
+	SourceURL *string  `json:"sourceUrl,omitempty"`
+}
+
+type FirewallRuleRequest struct {
+	Name              string             `json:"name"                        binding:"required"`
+	DomainListID      uuid.UUID          `json:"domainListId"                binding:"required"`
+	Action            string             `json:"action"                      binding:"required,firewallRuleAction"`
+	BlockResponseType *string            `json:"blockResponseType,omitempty" binding:"firewallRuleBlockResponseType"`
+	BlockResponse     *ResourceRecordSet `json:"blockResponse,omitempty"`
+	Priority          uint               `json:"priority"                    binding:"required"`
+}
+
+type DomainList struct {
+	ID          uuid.UUID `json:"id"`
+	Name        string    `json:"name"`
+	DomainCount int       `json:"domainCount"`
 }

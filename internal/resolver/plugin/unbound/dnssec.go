@@ -17,7 +17,6 @@ func filter(m *dns.Msg, filter func(dns.RR) bool) {
 		if !filter(r) {
 			rrs = append(rrs, r)
 		}
-
 	}
 	m.Ns = rrs
 
@@ -26,7 +25,6 @@ func filter(m *dns.Msg, filter func(dns.RR) bool) {
 		if !filter(r) {
 			rrs = append(rrs, r)
 		}
-
 	}
 	m.Extra = rrs
 }

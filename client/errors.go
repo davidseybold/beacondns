@@ -79,6 +79,10 @@ type DomainExistsInDomainListError struct {
 	beaconError
 }
 
+type DomainListInvalidStateError struct {
+	beaconError
+}
+
 func parseError(errResponse errorResponse) error {
 	bErr := beaconError(errResponse)
 	code := beaconerr.ErrorCode(errResponse.Code)
@@ -121,6 +125,10 @@ func parseError(errResponse errorResponse) error {
 		}
 	case beaconerr.ErrorCodeDomainExistsInDomainList:
 		return &DomainExistsInDomainListError{
+			beaconError: bErr,
+		}
+	case beaconerr.ErrorCodeDomainListInvalidState:
+		return &DomainListInvalidStateError{
 			beaconError: bErr,
 		}
 	default:

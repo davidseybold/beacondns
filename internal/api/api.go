@@ -24,6 +24,7 @@ func NewHTTPHandler(
 	r := gin.Default()
 
 	if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
+		registerStructValidators(v)
 		for name, fn := range validators {
 			err := v.RegisterValidation(name, fn)
 			if err != nil {
@@ -116,6 +117,14 @@ func (h *handler) handleError(c *gin.Context, err error) {
 			Message: "An unexpected error occurred",
 		})
 	}
+}
+
+func (h *handler) handleGinBindingError(c *gin.Context, err error) {
+	if err == nil {
+		return
+	}
+
+	h.handleError(c, translateGinBindingError(err))
 }
 
 func translateGinBindingError(err error) error {

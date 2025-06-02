@@ -22,8 +22,9 @@ type FirewallWriter interface {
 	PutFirewallRule(ctx context.Context, rule *FirewallRule, domains []string) error
 	DeleteFirewallRule(ctx context.Context, id uuid.UUID) error
 	UpdateFirewallRule(ctx context.Context, rule *FirewallRule) error
-	AddDomainsToFirewallRule(ctx context.Context, ruleID uuid.UUID, domains []string) error
-	RemoveDomainsFromFirewallRule(ctx context.Context, ruleID uuid.UUID, domains []string) error
+	AddDomainsToFirewallRules(ctx context.Context, ruleIDs []uuid.UUID, domains []string) error
+	RemoveDomainsFromFirewallRules(ctx context.Context, ruleIDs []uuid.UUID, domains []string) error
+	RefreshDomainsForRules(ctx context.Context, ruleIDs []uuid.UUID, domains []string) error
 }
 
 type FirewallRule struct {
@@ -57,29 +58,48 @@ type FirewallRuleMappingEvent struct {
 }
 
 func (s *Store) PutFirewallRule(ctx context.Context, rule *FirewallRule, domains []string) error {
-	tx := s.kvstore.Txn(ctx)
+	// Create batches of 100 domains to avoid overwhelming the transaction
+	batchSize := 100
+	domainBatches := make([][]string, 0, (len(domains)+batchSize-1)/batchSize)
+
+	for i := 0; i < len(domains); i += batchSize {
+		end := min(i+batchSize, len(domains))
+		domainBatches = append(domainBatches, domains[i:end])
+	}
 
 	ruleKey := createFirewallRuleKey(rule.ID)
 	ruleData, err := marshalFirewallRule(rule)
 	if err != nil {
 		return err
 	}
-	tx.Put(ruleKey, ruleData)
 
-	for _, domain := range domains {
-		domainKey := createFirewallRuleMappingKey(rule.ID, domain)
-		mapping := &FirewallRuleMapping{
-			RuleID: rule.ID,
-			Domain: domain,
-		}
-		mappingData, marshalErr := msgpack.Marshal(mapping)
-		if marshalErr != nil {
-			return marshalErr
-		}
-		tx.Put(domainKey, mappingData)
+	err = s.kvstore.Put(ctx, ruleKey, ruleData)
+	if err != nil {
+		return err
 	}
 
-	return tx.Commit()
+	for _, domainBatch := range domainBatches {
+		tx := s.kvstore.Txn(ctx)
+		for _, domain := range domainBatch {
+			domainKey := createFirewallRuleMappingKey(rule.ID, domain)
+			mapping := &FirewallRuleMapping{
+				RuleID: rule.ID,
+				Domain: domain,
+			}
+			mappingData, marshalErr := msgpack.Marshal(mapping)
+			if marshalErr != nil {
+				return marshalErr
+			}
+			tx.Put(domainKey, mappingData)
+		}
+
+		err = tx.Commit()
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (s *Store) DeleteFirewallRule(ctx context.Context, id uuid.UUID) error {
@@ -145,31 +165,35 @@ func (s *Store) GetFirewallRules(ctx context.Context, ids []uuid.UUID) ([]Firewa
 	return rules, nil
 }
 
-func (s *Store) AddDomainsToFirewallRule(ctx context.Context, ruleID uuid.UUID, domains []string) error {
+func (s *Store) AddDomainsToFirewallRules(ctx context.Context, ruleIDs []uuid.UUID, domains []string) error {
 	tx := s.kvstore.Txn(ctx)
 
-	for _, domain := range domains {
-		domainKey := createFirewallRuleMappingKey(ruleID, domain)
-		mapping := &FirewallRuleMapping{
-			RuleID: ruleID,
-			Domain: domain,
+	for _, ruleID := range ruleIDs {
+		for _, domain := range domains {
+			domainKey := createFirewallRuleMappingKey(ruleID, domain)
+			mapping := &FirewallRuleMapping{
+				RuleID: ruleID,
+				Domain: domain,
+			}
+			mappingData, marshalErr := msgpack.Marshal(mapping)
+			if marshalErr != nil {
+				return marshalErr
+			}
+			tx.Put(domainKey, mappingData)
 		}
-		mappingData, marshalErr := msgpack.Marshal(mapping)
-		if marshalErr != nil {
-			return marshalErr
-		}
-		tx.Put(domainKey, mappingData)
 	}
 
 	return tx.Commit()
 }
 
-func (s *Store) RemoveDomainsFromFirewallRule(ctx context.Context, ruleID uuid.UUID, domains []string) error {
+func (s *Store) RemoveDomainsFromFirewallRules(ctx context.Context, ruleIDs []uuid.UUID, domains []string) error {
 	tx := s.kvstore.Txn(ctx)
 
-	for _, domain := range domains {
-		domainKey := createFirewallRuleMappingKey(ruleID, domain)
-		tx.Delete(domainKey)
+	for _, ruleID := range ruleIDs {
+		for _, domain := range domains {
+			domainKey := createFirewallRuleMappingKey(ruleID, domain)
+			tx.Delete(domainKey)
+		}
 	}
 
 	return tx.Commit()
@@ -214,4 +238,28 @@ func (s *Store) SubscribeToFirewallRuleEvents(ctx context.Context) (<-chan Firew
 	}(kvstoreEvents, events)
 
 	return events, nil
+}
+
+func (s *Store) RefreshDomainsForRules(ctx context.Context, ruleIDs []uuid.UUID, domains []string) error {
+	tx := s.kvstore.Txn(ctx)
+
+	for _, ruleID := range ruleIDs {
+		// Delete all mappings for the rule
+		tx.Delete(createFirewallRuleMappingPrefix(ruleID), kvstore.WithPrefix())
+
+		for _, domain := range domains {
+			domainKey := createFirewallRuleMappingKey(ruleID, domain)
+			mapping := &FirewallRuleMapping{
+				RuleID: ruleID,
+				Domain: domain,
+			}
+			mappingData, marshalErr := msgpack.Marshal(mapping)
+			if marshalErr != nil {
+				return marshalErr
+			}
+			tx.Put(domainKey, mappingData)
+		}
+	}
+
+	return tx.Commit()
 }

@@ -1,20 +1,28 @@
 package model
 
 import (
+	"time"
+
 	"github.com/google/uuid"
 )
 
 type DomainListInfo struct {
 	ID          uuid.UUID   `json:"id"`
 	Name        string      `json:"name"`
+	IsManaged   bool        `json:"isManaged"`
+	SourceURL   *string     `json:"sourceUrl,omitempty"`
 	DomainCount int         `json:"domainCount"`
 	LinkedRules []uuid.UUID `json:"linkedRules"`
+	LastUpdated *time.Time  `json:"lastUpdated,omitempty"`
 }
 
 type DomainList struct {
-	ID      uuid.UUID `json:"id"`
-	Name    string    `json:"name"`
-	Domains []string  `json:"domains"`
+	ID          uuid.UUID  `json:"id"`
+	Name        string     `json:"name"`
+	IsManaged   bool       `json:"isManaged"`
+	SourceURL   *string    `json:"sourceUrl,omitempty"`
+	Domains     []string   `json:"domains"`
+	LastUpdated *time.Time `json:"lastUpdated,omitempty"`
 }
 
 type FirewallRuleAction string

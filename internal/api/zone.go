@@ -35,7 +35,7 @@ func (h *handler) ListZones(c *gin.Context) {
 func (h *handler) CreateZone(c *gin.Context) {
 	var body CreateZoneRequest
 	if err := c.ShouldBindJSON(&body); err != nil {
-		h.handleError(c, translateGinBindingError(err))
+		h.handleGinBindingError(c, err)
 		return
 	}
 
@@ -78,7 +78,7 @@ func (h *handler) UpsertResourceRecordSet(c *gin.Context) {
 
 	var body UpsertResourceRecordSetRequest
 	if err := c.ShouldBindJSON(&body); err != nil {
-		h.handleError(c, translateGinBindingError(err))
+		h.handleGinBindingError(c, err)
 		return
 	}
 

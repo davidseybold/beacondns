@@ -2,7 +2,6 @@ package commands
 
 import (
 	"context"
-	"os"
 	"strconv"
 
 	"github.com/olekukonko/tablewriter"
@@ -21,7 +20,7 @@ var createZoneCmd = &cobra.Command{
 	Use:   "create [name]",
 	Short: "Create a new DNS zone",
 	Args:  cobra.ExactArgs(1),
-	RunE: func(_ *cobra.Command, args []string) error {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		config, err := loadConfig()
 		if err != nil {
 			return err
@@ -35,7 +34,7 @@ var createZoneCmd = &cobra.Command{
 			return err
 		}
 
-		table := tablewriter.NewWriter(os.Stdout)
+		table := tablewriter.NewWriter(cmd.OutOrStdout())
 		table.Header([]string{"ID", "NAME", "RECORD COUNT"})
 		_ = table.Append([]string{zone.ID, zone.Name, strconv.Itoa(zone.ResourceRecordSetCount)})
 		return table.Render()
@@ -62,7 +61,7 @@ var listZonesCmd = &cobra.Command{
 			return nil
 		}
 
-		table := tablewriter.NewWriter(os.Stdout)
+		table := tablewriter.NewWriter(cmd.OutOrStdout())
 		table.Header([]string{"ID", "NAME", "RECORD COUNT"})
 		for _, zone := range zones {
 			_ = table.Append([]string{zone.ID, zone.Name, strconv.Itoa(zone.ResourceRecordSetCount)})
@@ -91,7 +90,7 @@ var describeZoneCmd = &cobra.Command{
 			return err
 		}
 
-		table := tablewriter.NewWriter(os.Stdout)
+		table := tablewriter.NewWriter(cmd.OutOrStdout())
 		table.Header([]string{"ID", "NAME", "RECORD COUNT"})
 		_ = table.Append([]string{zone.ID, zone.Name, strconv.Itoa(zone.ResourceRecordSetCount)})
 		return table.Render()

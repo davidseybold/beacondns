@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"log/slog"
 
+	"github.com/google/uuid"
+
 	bdns "github.com/davidseybold/beacondns/internal/dns"
 	"github.com/davidseybold/beacondns/internal/dnsstore"
 	"github.com/davidseybold/beacondns/internal/model"
@@ -62,6 +64,7 @@ func (p *EventProcessor) Events() []string {
 		EventTypeRuleUpdated,
 		EventTypeDomainListDeleted,
 		EventTypeDomainListCreated,
+		EventTypeDomainListRefreshed,
 	}
 }
 
@@ -81,6 +84,8 @@ func (p *EventProcessor) ProcessEvent(ctx context.Context, event *model.Event) e
 		return nil
 	case EventTypeDomainListCreated:
 		return nil
+	case EventTypeDomainListRefreshed:
+		return p.processDomainListRefreshedEvent(ctx, event)
 	default:
 		return fmt.Errorf("unknown event type: %s", event.Type)
 	}
@@ -92,9 +97,21 @@ func (p *EventProcessor) processDomainListDomainsAddedEvent(ctx context.Context,
 		return err
 	}
 
-	return p.store.AddDomainsToFirewallRule(
+	rules, err := p.repository.GetFirewallRepository().
+		GetFirewallRulesByDomainListID(ctx, domainListDomainsAddedEvent.ID)
+	if err != nil {
+		return err
+	}
+
+	ruleIDs := make([]uuid.UUID, 0, len(rules))
+
+	for _, rule := range rules {
+		ruleIDs = append(ruleIDs, rule.ID)
+	}
+
+	return p.store.AddDomainsToFirewallRules(
 		ctx,
-		domainListDomainsAddedEvent.DomainListID,
+		ruleIDs,
 		domainListDomainsAddedEvent.Domains,
 	)
 }
@@ -105,9 +122,20 @@ func (p *EventProcessor) processDomainListDomainsRemovedEvent(ctx context.Contex
 		return err
 	}
 
-	return p.store.RemoveDomainsFromFirewallRule(
+	rules, err := p.repository.GetFirewallRepository().
+		GetFirewallRulesByDomainListID(ctx, domainListDomainsRemovedEvent.ID)
+	if err != nil {
+		return err
+	}
+
+	ruleIDs := make([]uuid.UUID, 0, len(rules))
+	for _, rule := range rules {
+		ruleIDs = append(ruleIDs, rule.ID)
+	}
+
+	return p.store.RemoveDomainsFromFirewallRules(
 		ctx,
-		domainListDomainsRemovedEvent.DomainListID,
+		ruleIDs,
 		domainListDomainsRemovedEvent.Domains,
 	)
 }
@@ -118,20 +146,26 @@ func (p *EventProcessor) processFirewallRuleCreatedEvent(ctx context.Context, ev
 		return err
 	}
 
-	blockResponse, err := bdns.ParseRRs(firewallRuleCreatedEvent.FirewallRule.BlockResponse)
+	blockResponse, err := bdns.ParseRRs(firewallRuleCreatedEvent.BlockResponse)
+	if err != nil {
+		return err
+	}
+
+	domains, err := p.repository.GetFirewallRepository().
+		GetDomainListDomains(ctx, firewallRuleCreatedEvent.DomainListID)
 	if err != nil {
 		return err
 	}
 
 	rule := &dnsstore.FirewallRule{
-		ID:                firewallRuleCreatedEvent.FirewallRule.ID,
-		Action:            firewallRuleCreatedEvent.FirewallRule.Action,
-		Priority:          firewallRuleCreatedEvent.FirewallRule.Priority,
-		BlockResponseType: firewallRuleCreatedEvent.FirewallRule.BlockResponseType,
+		ID:                firewallRuleCreatedEvent.ID,
+		Action:            firewallRuleCreatedEvent.Action,
+		Priority:          firewallRuleCreatedEvent.Priority,
+		BlockResponseType: firewallRuleCreatedEvent.BlockResponseType,
 		BlockResponse:     blockResponse,
 	}
 
-	return p.store.PutFirewallRule(ctx, rule, firewallRuleCreatedEvent.Domains)
+	return p.store.PutFirewallRule(ctx, rule, domains)
 }
 
 func (p *EventProcessor) processFirewallRuleDeletedEvent(ctx context.Context, event *model.Event) error {
@@ -140,7 +174,7 @@ func (p *EventProcessor) processFirewallRuleDeletedEvent(ctx context.Context, ev
 		return err
 	}
 
-	return p.store.DeleteFirewallRule(ctx, firewallRuleDeletedEvent.FirewallRule.ID)
+	return p.store.DeleteFirewallRule(ctx, firewallRuleDeletedEvent.ID)
 }
 
 func (p *EventProcessor) processFirewallRuleUpdatedEvent(ctx context.Context, event *model.Event) error {
@@ -149,18 +183,42 @@ func (p *EventProcessor) processFirewallRuleUpdatedEvent(ctx context.Context, ev
 		return err
 	}
 
-	blockResponse, err := bdns.ParseRRs(firewallRuleUpdatedEvent.FirewallRule.BlockResponse)
+	blockResponse, err := bdns.ParseRRs(firewallRuleUpdatedEvent.BlockResponse)
 	if err != nil {
 		return err
 	}
 
 	rule := &dnsstore.FirewallRule{
-		ID:                firewallRuleUpdatedEvent.FirewallRule.ID,
-		Action:            firewallRuleUpdatedEvent.FirewallRule.Action,
-		Priority:          firewallRuleUpdatedEvent.FirewallRule.Priority,
-		BlockResponseType: firewallRuleUpdatedEvent.FirewallRule.BlockResponseType,
+		ID:                firewallRuleUpdatedEvent.ID,
+		Action:            firewallRuleUpdatedEvent.Action,
+		Priority:          firewallRuleUpdatedEvent.Priority,
+		BlockResponseType: firewallRuleUpdatedEvent.BlockResponseType,
 		BlockResponse:     blockResponse,
 	}
 
 	return p.store.UpdateFirewallRule(ctx, rule)
+}
+
+func (p *EventProcessor) processDomainListRefreshedEvent(ctx context.Context, event *model.Event) error {
+	var domainListRefreshedEvent DomainListRefreshedEvent
+	if err := json.Unmarshal(event.Payload, &domainListRefreshedEvent); err != nil {
+		return err
+	}
+
+	domains, err := p.repository.GetFirewallRepository().GetDomainListDomains(ctx, domainListRefreshedEvent.ID)
+	if err != nil {
+		return err
+	}
+
+	rules, err := p.repository.GetFirewallRepository().GetFirewallRulesByDomainListID(ctx, domainListRefreshedEvent.ID)
+	if err != nil {
+		return err
+	}
+
+	ruleIDs := make([]uuid.UUID, 0, len(rules))
+	for _, rule := range rules {
+		ruleIDs = append(ruleIDs, rule.ID)
+	}
+
+	return p.store.RefreshDomainsForRules(ctx, ruleIDs, domains)
 }

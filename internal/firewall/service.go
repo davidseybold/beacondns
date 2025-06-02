@@ -20,8 +20,10 @@ type Service interface {
 	GetFirewallRule(ctx context.Context, id uuid.UUID) (*model.FirewallRule, error)
 	GetFirewallRules(ctx context.Context) ([]model.FirewallRule, error)
 
-	CreateDomainList(ctx context.Context, name string, domains []string) (*model.DomainListInfo, error)
+	CreateUnmanagedDomainList(ctx context.Context, name string, domains []string) (*model.DomainListInfo, error)
+	CreateManagedDomainList(ctx context.Context, name string, sourceURL string) (*model.DomainListInfo, error)
 	DeleteDomainList(ctx context.Context, id uuid.UUID) error
+	RefreshManagedDomainList(ctx context.Context, id uuid.UUID) error
 	AddDomainsToDomainList(ctx context.Context, id uuid.UUID, domains []string) error
 	RemoveDomainsFromDomainList(ctx context.Context, id uuid.UUID, domains []string) error
 	GetDomainList(ctx context.Context, id uuid.UUID) (*model.DomainListInfo, error)
@@ -49,6 +51,10 @@ func (d *DefaultService) AddDomainsToDomainList(ctx context.Context, id uuid.UUI
 		return beaconerr.ErrInternalError("failed to add domains to domain list", err)
 	}
 
+	if info.IsManaged {
+		return beaconerr.ErrDomainListInvalidState("cannot add domains to managed domain list")
+	}
+
 	fqdnDomains := make([]string, 0, len(domains))
 	for _, domain := range domains {
 		fqdnDomains = append(fqdnDomains, dns.Fqdn(domain))
@@ -60,7 +66,7 @@ func (d *DefaultService) AddDomainsToDomainList(ctx context.Context, id uuid.UUI
 			return txErr
 		}
 
-		event := NewDomainListDomainsAddedEvent(id, fqdnDomains, info.LinkedRules)
+		event := NewDomainListDomainsAddedEvent(id, fqdnDomains)
 		if txErr = d.repReg.GetEventRepository().CreateEvent(ctx, event); txErr != nil {
 			return fmt.Errorf("failed to save event: %w", txErr)
 		}
@@ -76,7 +82,7 @@ func (d *DefaultService) AddDomainsToDomainList(ctx context.Context, id uuid.UUI
 	return nil
 }
 
-func (d *DefaultService) CreateDomainList(
+func (d *DefaultService) CreateUnmanagedDomainList(
 	ctx context.Context,
 	name string,
 	domains []string,
@@ -100,7 +106,7 @@ func (d *DefaultService) CreateDomainList(
 			return fmt.Errorf("failed to create domain list: %w", txErr)
 		}
 
-		event := NewDomainListCreatedEvent(info.ID, fqdnDomains)
+		event := NewDomainListCreatedEvent(info)
 		if txErr = d.repReg.GetEventRepository().CreateEvent(ctx, event); txErr != nil {
 			return fmt.Errorf("failed to save event: %w", txErr)
 		}
@@ -114,13 +120,87 @@ func (d *DefaultService) CreateDomainList(
 	return info, nil
 }
 
+func (d *DefaultService) CreateManagedDomainList(
+
+	ctx context.Context,
+	name string,
+	sourceURL string,
+) (*model.DomainListInfo, error) {
+	dl := &model.DomainList{
+		ID:        uuid.New(),
+		Name:      name,
+		IsManaged: true,
+		SourceURL: &sourceURL,
+	}
+
+	domains, err := fetchDomainListFromSourceURL(ctx, sourceURL)
+	if err != nil {
+		return nil, beaconerr.ErrInternalError("failed to fetch domain list from source URL", err)
+	}
+
+	dl.Domains = domains
+
+	var info *model.DomainListInfo
+	err = d.repReg.InTx(ctx, func(ctx context.Context, r repository.Registry) error {
+		var txErr error
+		info, txErr = r.GetFirewallRepository().CreateDomainList(ctx, dl)
+		if txErr != nil {
+			return fmt.Errorf("failed to create domain list: %w", txErr)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, beaconerr.ErrInternalError("failed to create domain list", err)
+	}
+
+	return info, nil
+}
+
+func (d *DefaultService) RefreshManagedDomainList(ctx context.Context, id uuid.UUID) error {
+	info, err := d.repReg.GetFirewallRepository().GetDomainListInfo(ctx, id)
+	if err != nil {
+		return beaconerr.ErrInternalError("failed to get domain list", err)
+	}
+
+	if !info.IsManaged {
+		return beaconerr.ErrDomainListInvalidState("cannot refresh unmanaged domain list")
+	}
+
+	domains, err := fetchDomainListFromSourceURL(ctx, *info.SourceURL)
+	if err != nil {
+		return beaconerr.ErrInternalError("failed to fetch domain list from source URL", err)
+	}
+
+	err = d.repReg.InTx(ctx, func(ctx context.Context, r repository.Registry) error {
+		txErr := r.GetFirewallRepository().OverwriteDomainListDomains(ctx, id, domains)
+		if txErr != nil {
+			return fmt.Errorf("failed to overwrite domain list domains: %w", txErr)
+		}
+
+		event := NewDomainListRefreshedEvent(id)
+		if txErr = d.repReg.GetEventRepository().CreateEvent(ctx, event); txErr != nil {
+			return fmt.Errorf("failed to save event: %w", txErr)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return beaconerr.ErrInternalError("failed to refresh domain list", err)
+	}
+
+	return nil
+}
+
 func (d *DefaultService) CreateFirewallRule(
 	ctx context.Context,
 	rule *model.FirewallRule,
 ) (*model.FirewallRule, error) {
-	domains, err := d.repReg.GetFirewallRepository().GetDomainListDomains(ctx, rule.DomainListID)
-	if err != nil {
-		return nil, beaconerr.ErrInternalError("failed to get domain list domains", err)
+	_, err := d.repReg.GetFirewallRepository().GetDomainListInfo(ctx, rule.DomainListID)
+	if err != nil && errors.Is(err, repository.ErrEntityNotFound) {
+		return nil, beaconerr.ErrNoSuchDomainList("domain list not found")
+	} else if err != nil {
+		return nil, beaconerr.ErrInternalError("failed to get domain list", err)
 	}
 
 	rule.ID = uuid.New()
@@ -133,7 +213,7 @@ func (d *DefaultService) CreateFirewallRule(
 			return fmt.Errorf("failed to create firewall rule: %w", txErr)
 		}
 
-		event := NewRuleCreatedEvent(createdRule, domains)
+		event := NewRuleCreatedEvent(createdRule)
 		if txErr = d.repReg.GetEventRepository().CreateEvent(ctx, event); txErr != nil {
 			return fmt.Errorf("failed to save event: %w", txErr)
 		}
@@ -169,7 +249,7 @@ func (d *DefaultService) DeleteDomainList(ctx context.Context, id uuid.UUID) err
 }
 
 func (d *DefaultService) DeleteFirewallRule(ctx context.Context, id uuid.UUID) error {
-	rule, err := d.repReg.GetFirewallRepository().GetFirewallRule(ctx, id)
+	_, err := d.repReg.GetFirewallRepository().GetFirewallRule(ctx, id)
 	if err != nil && errors.Is(err, repository.ErrEntityNotFound) {
 		return beaconerr.ErrNoSuchFirewallRule("firewall rule not found")
 	} else if err != nil {
@@ -182,7 +262,7 @@ func (d *DefaultService) DeleteFirewallRule(ctx context.Context, id uuid.UUID) e
 			return fmt.Errorf("failed to delete firewall rule: %w", txErr)
 		}
 
-		event := NewRuleDeletedEvent(rule)
+		event := NewRuleDeletedEvent(id)
 		if txErr = d.repReg.GetEventRepository().CreateEvent(ctx, event); txErr != nil {
 			return fmt.Errorf("failed to save event: %w", txErr)
 		}
@@ -246,11 +326,15 @@ func (d *DefaultService) GetFirewallRules(ctx context.Context) ([]model.Firewall
 }
 
 func (d *DefaultService) RemoveDomainsFromDomainList(ctx context.Context, id uuid.UUID, domains []string) error {
-	dl, err := d.repReg.GetFirewallRepository().GetDomainListInfo(ctx, id)
+	info, err := d.repReg.GetFirewallRepository().GetDomainListInfo(ctx, id)
 	if err != nil && errors.Is(err, repository.ErrEntityNotFound) {
 		return beaconerr.ErrNoSuchDomainList("domain list not found")
 	} else if err != nil {
 		return beaconerr.ErrInternalError("failed to remove domains from domain list", err)
+	}
+
+	if info.IsManaged {
+		return beaconerr.ErrDomainListInvalidState("cannot remove domains from managed domain list")
 	}
 
 	fqdnDomains := make([]string, 0, len(domains))
@@ -264,7 +348,7 @@ func (d *DefaultService) RemoveDomainsFromDomainList(ctx context.Context, id uui
 			return fmt.Errorf("failed to remove domains from domain list: %w", txErr)
 		}
 
-		event := NewDomainListDomainsRemovedEvent(id, fqdnDomains, dl.LinkedRules)
+		event := NewDomainListDomainsRemovedEvent(id, fqdnDomains)
 		if txErr = d.repReg.GetEventRepository().CreateEvent(ctx, event); txErr != nil {
 			return fmt.Errorf("failed to save event: %w", txErr)
 		}
@@ -282,8 +366,22 @@ func (d *DefaultService) UpdateFirewallRule(
 	ctx context.Context,
 	rule *model.FirewallRule,
 ) (*model.FirewallRule, error) {
+	rule, err := d.repReg.GetFirewallRepository().GetFirewallRule(ctx, rule.ID)
+	if err != nil && errors.Is(err, repository.ErrEntityNotFound) {
+		return nil, beaconerr.ErrNoSuchFirewallRule("firewall rule not found")
+	} else if err != nil {
+		return nil, beaconerr.ErrInternalError("failed to get firewall rule", err)
+	}
+
+	_, err = d.repReg.GetFirewallRepository().GetDomainListInfo(ctx, rule.DomainListID)
+	if err != nil && errors.Is(err, repository.ErrEntityNotFound) {
+		return nil, beaconerr.ErrNoSuchDomainList("domain list not found")
+	} else if err != nil {
+		return nil, beaconerr.ErrInternalError("failed to get domain list", err)
+	}
+
 	var updatedRule *model.FirewallRule
-	err := d.repReg.InTx(ctx, func(ctx context.Context, r repository.Registry) error {
+	err = d.repReg.InTx(ctx, func(ctx context.Context, r repository.Registry) error {
 		var txErr error
 		updatedRule, txErr = r.GetFirewallRepository().UpdateFirewallRule(ctx, rule)
 		if txErr != nil {

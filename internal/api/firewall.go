@@ -4,30 +4,25 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 
 	"github.com/davidseybold/beacondns/internal/model"
 )
 
-type CreateDomainListRequest struct {
-	Name    string   `json:"name"    binding:"required"`
-	Domains []string `json:"domains" binding:"required"`
-}
-
-type DomainList struct {
-	ID          uuid.UUID `json:"id"`
-	Name        string    `json:"name"`
-	DomainCount int       `json:"domainCount"`
-}
-
 func (h *handler) CreateDomainList(c *gin.Context) {
 	var req CreateDomainListRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.handleError(c, err)
+		h.handleGinBindingError(c, err)
 		return
 	}
 
-	info, err := h.firewallService.CreateDomainList(c, req.Name, req.Domains)
+	var info *model.DomainListInfo
+	var err error
+
+	if req.IsManaged {
+		info, err = h.firewallService.CreateManagedDomainList(c, req.Name, *req.SourceURL)
+	} else {
+		info, err = h.firewallService.CreateUnmanagedDomainList(c, req.Name, req.Domains)
+	}
 	if err != nil {
 		h.handleError(c, err)
 		return
@@ -56,10 +51,6 @@ func (h *handler) DeleteDomainList(c *gin.Context) {
 	c.JSON(http.StatusNoContent, nil)
 }
 
-type AddDomainsToDomainListRequest struct {
-	Domains []string `json:"domains" binding:"required"`
-}
-
 func (h *handler) AddDomainsToDomainList(c *gin.Context) {
 	id, err := getIDParam(c)
 	if err != nil {
@@ -69,7 +60,7 @@ func (h *handler) AddDomainsToDomainList(c *gin.Context) {
 
 	var req AddDomainsToDomainListRequest
 	if err = c.ShouldBindJSON(&req); err != nil {
-		h.handleError(c, err)
+		h.handleGinBindingError(c, err)
 		return
 	}
 
@@ -82,10 +73,6 @@ func (h *handler) AddDomainsToDomainList(c *gin.Context) {
 	c.JSON(http.StatusNoContent, nil)
 }
 
-type RemoveDomainsFromDomainListRequest struct {
-	Domains []string `json:"domains" binding:"required"`
-}
-
 func (h *handler) RemoveDomainsFromDomainList(c *gin.Context) {
 	id, err := getIDParam(c)
 	if err != nil {
@@ -95,7 +82,7 @@ func (h *handler) RemoveDomainsFromDomainList(c *gin.Context) {
 
 	var req RemoveDomainsFromDomainListRequest
 	if err = c.ShouldBindJSON(&req); err != nil {
-		h.handleError(c, err)
+		h.handleGinBindingError(c, err)
 		return
 	}
 
@@ -128,10 +115,6 @@ func (h *handler) GetDomainList(c *gin.Context) {
 	})
 }
 
-type ListDomainListDomainsResponse struct {
-	Domains []string `json:"domains"`
-}
-
 func (h *handler) ListDomainListDomains(c *gin.Context) {
 	id, err := getIDParam(c)
 	if err != nil {
@@ -148,10 +131,6 @@ func (h *handler) ListDomainListDomains(c *gin.Context) {
 	c.JSON(http.StatusOK, ListDomainListDomainsResponse{
 		Domains: domains,
 	})
-}
-
-type ListDomainListsResponse struct {
-	DomainLists []DomainList `json:"domainLists"`
 }
 
 func (h *handler) ListDomainLists(c *gin.Context) {
@@ -175,19 +154,10 @@ func (h *handler) ListDomainLists(c *gin.Context) {
 	})
 }
 
-type CreateFirewallRuleRequest struct {
-	Name              string             `json:"name"                        binding:"required"`
-	DomainListID      uuid.UUID          `json:"domainListId"                binding:"required"`
-	Action            string             `json:"action"                      binding:"required"`
-	BlockResponseType *string            `json:"blockResponseType,omitempty"`
-	BlockResponse     *ResourceRecordSet `json:"blockResponse,omitempty"`
-	Priority          uint               `json:"priority"                    binding:"required"`
-}
-
 func (h *handler) CreateFirewallRule(c *gin.Context) {
-	var req CreateFirewallRuleRequest
+	var req FirewallRuleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		h.handleError(c, err)
+		h.handleGinBindingError(c, err)
 		return
 	}
 
@@ -260,15 +230,6 @@ func (h *handler) ListFirewallRules(c *gin.Context) {
 	})
 }
 
-type UpdateFirewallRuleRequest struct {
-	Name              string             `json:"name"                        binding:"required"`
-	Action            string             `json:"action"                      binding:"required"`
-	DomainListID      uuid.UUID          `json:"domainListId"                binding:"required"`
-	BlockResponseType *string            `json:"blockResponseType,omitempty"`
-	BlockResponse     *ResourceRecordSet `json:"blockResponse,omitempty"`
-	Priority          uint               `json:"priority"                    binding:"required"`
-}
-
 func (h *handler) UpdateFirewallRule(c *gin.Context) {
 	id, err := getIDParam(c)
 	if err != nil {
@@ -276,7 +237,7 @@ func (h *handler) UpdateFirewallRule(c *gin.Context) {
 		return
 	}
 
-	var req UpdateFirewallRuleRequest
+	var req FirewallRuleRequest
 	if err = c.ShouldBindJSON(&req); err != nil {
 		h.handleError(c, err)
 		return

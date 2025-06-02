@@ -6,10 +6,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/davidseybold/beacondns/client"
 	"github.com/google/uuid"
 	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
+
+	"github.com/davidseybold/beacondns/client"
 )
 
 var domainListsCmd = &cobra.Command{
@@ -21,7 +22,7 @@ var domainListsCmd = &cobra.Command{
 var createDomainListCmd = &cobra.Command{
 	Use:   "create",
 	Short: "Create a new domain list",
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(cmd *cobra.Command, _ []string) error {
 		config, err := loadConfig()
 		if err != nil {
 			return err
@@ -43,9 +44,9 @@ var createDomainListCmd = &cobra.Command{
 		}
 
 		if file != "" {
-			fileDomains, err := readDomainsFromFile(file)
-			if err != nil {
-				return err
+			fileDomains, readErr := readDomainsFromFile(file)
+			if readErr != nil {
+				return readErr
 			}
 			domains = append(domains, fileDomains...)
 		}
@@ -59,7 +60,7 @@ var createDomainListCmd = &cobra.Command{
 			return err
 		}
 
-		table := tablewriter.NewWriter(os.Stdout)
+		table := tablewriter.NewWriter(cmd.OutOrStdout())
 		table.Header([]string{"ID", "NAME", "DOMAIN COUNT"})
 		_ = table.Append([]string{domainList.ID.String(), domainList.Name, strconv.Itoa(domainList.DomainCount)})
 		return table.Render()
@@ -105,7 +106,7 @@ var deleteDomainListCmd = &cobra.Command{
 var listDomainListsCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all domain lists",
-	RunE: func(cmd *cobra.Command, args []string) error {
+	RunE: func(cmd *cobra.Command, _ []string) error {
 		config, err := loadConfig()
 		if err != nil {
 			return err
@@ -117,10 +118,10 @@ var listDomainListsCmd = &cobra.Command{
 			return err
 		}
 
-		table := tablewriter.NewWriter(os.Stdout)
+		table := tablewriter.NewWriter(cmd.OutOrStdout())
 		table.Header([]string{"ID", "NAME", "DOMAIN COUNT"})
 		for _, domainList := range domainLists {
-			table.Append([]string{domainList.ID.String(), domainList.Name, strconv.Itoa(domainList.DomainCount)})
+			_ = table.Append([]string{domainList.ID.String(), domainList.Name, strconv.Itoa(domainList.DomainCount)})
 		}
 		return table.Render()
 	},
@@ -149,7 +150,7 @@ var getDomainListCmd = &cobra.Command{
 			return err
 		}
 
-		table := tablewriter.NewWriter(os.Stdout)
+		table := tablewriter.NewWriter(cmd.OutOrStdout())
 		table.Header([]string{"ID", "NAME", "DOMAIN COUNT"})
 		_ = table.Append([]string{domainList.ID.String(), domainList.Name, strconv.Itoa(domainList.DomainCount)})
 		return table.Render()
