@@ -2,7 +2,7 @@ FROM golang:1.24.3 AS builder
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y make libunbound-dev
+RUN apt-get update && apt-get install -y make
 
 COPY . .
 
@@ -11,7 +11,6 @@ RUN make build-resolver
 FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-  libunbound8 \
   ca-certificates && \
   rm -rf /var/lib/apt/lists/*
 

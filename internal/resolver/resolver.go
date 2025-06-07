@@ -19,7 +19,7 @@ import (
 
 	_ "github.com/davidseybold/beacondns/internal/resolver/plugin/beaconauth"     // used for plugin registration.
 	_ "github.com/davidseybold/beacondns/internal/resolver/plugin/beaconfirewall" // used for plugin registration.
-	_ "github.com/davidseybold/beacondns/internal/resolver/plugin/unbound"        // used for plugin registration.
+	_ "github.com/davidseybold/beacondns/internal/resolver/plugin/beaconresolve"  // used for plugin registration.
 )
 
 //nolint:gochecknoinits // used for plugin registration.
@@ -33,8 +33,8 @@ func init() {
 		"cache",
 		"beaconfirewall", // custom plugin
 		"beaconauth",     // custom plugin
+		"beaconresolve",  // custom plugin
 		"forward",
-		"unbound",
 	}
 }
 
@@ -102,12 +102,11 @@ func (r *Resolver) Run(ctx context.Context) error {
 const corefile = `
 . {
     any
-	cache
     {{ if eq .Type "forwarder" }}
     forward . {{ join .Forwarders " " }}
     {{ end }}
     {{ if eq .Type "recursive" }}
-    unbound
+    beaconresolve
     {{ end }}
     errors
     log

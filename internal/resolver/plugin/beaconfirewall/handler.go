@@ -51,6 +51,7 @@ func (b *BeaconFirewall) blockResponse(
 ) (int, error) {
 	msg := new(dns.Msg)
 	msg.Authoritative, msg.RecursionAvailable, msg.Compress = true, false, true
+	msg.SetReply(state.Req)
 
 	if rule.BlockResponseType == nil {
 		return dns.RcodeServerFailure, errors.New("block response type is nil")

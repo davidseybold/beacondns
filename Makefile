@@ -5,9 +5,11 @@ BIN_DIR := bin
 
 CONTROLLER_DIR := ./cmd/controller
 RESOLVER_DIR := ./cmd/resolver
+DUG_DIR := ./cmd/dug
 
 CONTROLLER_BIN := $(BIN_DIR)/controller
 RESOLVER_BIN := $(BIN_DIR)/resolver
+DUG_BIN := $(BIN_DIR)/dug
 
 GO := go
 
@@ -39,7 +41,11 @@ build-controller:
 
 build-resolver:
 	@echo ">> Building resolver..."
-	CGO_ENABLED=1 CGO_CFLAGS=$(CGO_CFLAGS) CGO_LDFLAGS=$(CGO_LDFLAGS) $(GO) build -o $(RESOLVER_BIN) $(RESOLVER_DIR)
+	$(GO) build -o $(RESOLVER_BIN) $(RESOLVER_DIR)
+
+build-dug:
+	@echo ">> Building dug..."
+	$(GO) build -o $(DUG_BIN) $(DUG_DIR)
 
 # Run Targets
 run-controller: build-controller
