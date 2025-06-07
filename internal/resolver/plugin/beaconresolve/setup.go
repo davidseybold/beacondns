@@ -6,6 +6,7 @@ import (
 	"github.com/coredns/caddy"
 	"github.com/coredns/coredns/core/dnsserver"
 	"github.com/coredns/coredns/plugin"
+
 	"github.com/davidseybold/beacondns/internal/recursive"
 )
 
@@ -57,24 +58,10 @@ func beaconParse(c *caddy.Controller) (*BeaconResolve, error) {
 	return &BeaconResolve{}, nil
 }
 
-func parseAttributes(c *caddy.Controller) (*BeaconResolve, error) {
+func parseAttributes(_ *caddy.Controller) (*BeaconResolve, error) {
 	beacon := &BeaconResolve{}
 
-	config := Config{}
-
-	for {
-		switch c.Val() {
-		default:
-			if c.Val() != "}" {
-				return nil, c.Errf("unknown property '%s'", c.Val())
-			}
-		}
-		if !c.Next() {
-			break
-		}
-	}
-
-	beacon.config = config
+	beacon.config = Config{}
 
 	return beacon, nil
 }

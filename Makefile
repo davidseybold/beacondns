@@ -13,11 +13,7 @@ DUG_BIN := $(BIN_DIR)/dug
 
 GO := go
 
-CGO_CFLAGS := -I/opt/homebrew/include
-CGO_LDFLAGS := -L/opt/homebrew/lib
-
 GOLANGCI_LINT := $(shell which golangci-lint 2>/dev/null)
-UNBOUND := $(shell which unbound 2>/dev/null)
 
 
 .PHONY: all build-controller build-agent build-cli build run-controller run-agent run-cli test lint fmt clean install-tools 
@@ -28,10 +24,7 @@ ifndef GOLANGCI_LINT
 	@echo ">> Installing golangci-lint..."
 	brew install golangci-lint
 endif
-ifndef UNBOUND
-	@echo ">> Installing unbound..."
-	brew install unbound
-endif
+
 # Build Targets
 build: build-controller build-agent build-cli
 
@@ -71,7 +64,7 @@ test:
 
 lint:
 	@echo ">> Linting..."
-	CGO_CFLAGS=$(CGO_CFLAGS) CGO_LDFLAGS=$(CGO_LDFLAGS) golangci-lint run
+	golangci-lint run
 
 fmt:
 	@echo ">> Formatting..."

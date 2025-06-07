@@ -236,11 +236,9 @@ func (s *Store) SubscribeToFirewallRuleEvents(ctx context.Context) (<-chan Firew
 }
 
 func (s *Store) RefreshDomainsForRules(ctx context.Context, ruleIDs []uuid.UUID, domains []string) error {
-
 	domainBatches := createBatches(domains, 100)
 
 	for _, ruleID := range ruleIDs {
-
 		// Delete all mappings for the rule
 		err := s.kvstore.Delete(ctx, createFirewallRuleMappingPrefix(ruleID), kvstore.WithPrefix())
 		if err != nil {
@@ -262,7 +260,7 @@ func (s *Store) RefreshDomainsForRules(ctx context.Context, ruleIDs []uuid.UUID,
 				tx.Put(domainKey, mappingData)
 			}
 
-			err := tx.Commit()
+			err = tx.Commit()
 			if err != nil {
 				return err
 			}

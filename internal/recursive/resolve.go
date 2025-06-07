@@ -101,7 +101,6 @@ func (r *Resolver) resolve(ctx context.Context, qName string, qType uint16) (*Re
 
 	iteration := 0
 	for iteration < maxCnameDepth {
-
 		resp, err = r.iterativeResolve(ctx, currentQName, qType)
 		if err != nil {
 			return nil, err
@@ -114,7 +113,7 @@ func (r *Resolver) resolve(ctx context.Context, qName string, qType uint16) (*Re
 		cnameFound := false
 		for _, rr := range resp.Answer {
 			if rr.Header().Rrtype == dns.TypeCNAME {
-				cname := rr.(*dns.CNAME)
+				cname, _ := rr.(*dns.CNAME)
 
 				currentQName = cname.Target
 				answers = append(answers, rr)
@@ -142,7 +141,8 @@ func (r *Resolver) resolve(ctx context.Context, qName string, qType uint16) (*Re
 		Rcode:              resp.Rcode,
 	}
 	answerPacket.SetQuestion(qName, qType)
-	answerPacket.Answer = append(answers, resp.Answer...)
+	answers = append(answers, resp.Answer...)
+	answerPacket.Answer = answers
 
 	answerPacket.Ns = resp.Ns
 
@@ -159,8 +159,9 @@ var stackPool = sync.Pool{
 }
 
 func (r *Resolver) iterativeResolve(ctx context.Context, qName string, qType uint16) (*dns.Msg, error) {
-	qStateStack := stackPool.Get().(*qStateStack)
+	qStateStack, _ := stackPool.Get().(*qStateStack)
 	defer stackPool.Put(qStateStack)
+	qStateStack.Reset()
 
 	qStateStack.Push(&qState{QName: qName, QType: qType, Nameservers: rootNameserverDomains})
 
@@ -237,7 +238,6 @@ func (r *Resolver) iterativeResolve(ctx context.Context, qName string, qType uin
 		}
 
 		qStateStack.Pop()
-
 	}
 
 	return resp, err
@@ -319,26 +319,15 @@ func (r *Resolver) queryNameserver(ctx context.Context, nsIP string, msg *dns.Ms
 }
 
 func (r *Resolver) requestUDP(ctx context.Context, ip string, msg *dns.Msg) (*dns.Msg, error) {
-	// TODO: Add DNSSEC support and set EDNS0 do here
 	msg.SetEdns0(1232, false)
-	maxRetries := 4
-	backoff := 100 * time.Millisecond
 	var resp *dns.Msg
 	var err error
+	timeoutCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	resp, _, err = r.udpClient.ExchangeContext(timeoutCtx, msg, net.JoinHostPort(ip, "53"))
+	cancel()
 
-	for i := range maxRetries {
-		ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
-		resp, _, err = r.udpClient.ExchangeContext(ctx, msg, net.JoinHostPort(ip, "53"))
-		cancel()
-
-		if err == nil {
-			return resp, nil
-		}
-
-		if i < maxRetries-1 {
-			time.Sleep(backoff)
-			backoff *= 2
-		}
+	if err == nil {
+		return resp, nil
 	}
 	return nil, err
 }
@@ -373,7 +362,7 @@ func (r *Resolver) cacheDNSResponse(qName string, qType uint16, resp *dns.Msg) {
 	// Include Authority records but only if they are delegations
 	for _, rr := range resp.Ns {
 		if rr.Header().Rrtype == dns.TypeNS && dns.IsSubDomain(rr.Header().Name, qName) {
-			ns := rr.(*dns.NS)
+			ns, _ := rr.(*dns.NS)
 			recordsToCache = append(recordsToCache, ns)
 			glueTargets[ns.Ns] = struct{}{}
 		}
@@ -397,7 +386,7 @@ func getNameServerReferrals(resp *dns.Msg) []string {
 	referrals := make([]string, 0, len(resp.Ns))
 	for _, rr := range resp.Ns {
 		if rr.Header().Rrtype == dns.TypeNS {
-			ns := rr.(*dns.NS)
+			ns, _ := rr.(*dns.NS)
 			referrals = append(referrals, ns.Ns)
 		}
 	}
@@ -409,7 +398,8 @@ func isReferral(resp *dns.Msg) bool {
 }
 
 func isNegative(resp *dns.Msg) bool {
-	return (resp.Rcode == dns.RcodeNameError || (len(resp.Answer) == 0 && resp.Rcode == dns.RcodeSuccess)) && contains(resp.Ns, dns.TypeSOA)
+	return (resp.Rcode == dns.RcodeNameError || (len(resp.Answer) == 0 && resp.Rcode == dns.RcodeSuccess)) &&
+		contains(resp.Ns, dns.TypeSOA)
 }
 
 func contains(rrs []dns.RR, rrtype uint16) bool {
@@ -424,7 +414,8 @@ func contains(rrs []dns.RR, rrtype uint16) bool {
 func getSOA(resp *dns.Msg) *dns.SOA {
 	for _, rr := range resp.Ns {
 		if rr.Header().Rrtype == dns.TypeSOA {
-			return rr.(*dns.SOA)
+			soa, _ := rr.(*dns.SOA)
+			return soa
 		}
 	}
 	return nil
@@ -489,4 +480,8 @@ func (s *qStateStack) Peek() *qState {
 	}
 
 	return s.states[len(s.states)-1]
+}
+
+func (s *qStateStack) Reset() {
+	s.states = s.states[:0]
 }

@@ -1,7 +1,9 @@
+//nolint:forbidigo
 package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -14,19 +16,23 @@ import (
 )
 
 func main() {
-	resolver, err := recursive.NewResolver(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
+	if err := run(); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+}
 
+func run() error {
+	resolver, err := recursive.NewResolver(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 	if err != nil {
-		slog.Error("failed to create resolver", "error", err)
-		return
+		return fmt.Errorf("failed to create resolver: %w", err)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	if len(os.Args) < 3 {
-		fmt.Println("Usage: dug <domain> <type>")
-		return
+		return errors.New("usage: dug <domain> <type>")
 	}
 
 	domain := os.Args[1]
@@ -34,16 +40,16 @@ func main() {
 
 	qType, ok := dns.StringToType[strings.ToUpper(os.Args[2])]
 	if !ok {
-		fmt.Println("Invalid type")
-		return
+		return errors.New("invalid type")
 	}
 
 	result, err := resolver.Resolve(ctx, domain, qType)
 	if err != nil {
-		slog.Error("failed to resolve", "error", err)
-		return
+		return fmt.Errorf("failed to resolve: %w", err)
 	}
 
-	fmt.Printf("%+v\n", result.AnswerPacket)
-	fmt.Printf(";; Query time: %v\n", result.Rtt)
+	fmt.Println(result.AnswerPacket)
+	fmt.Println(";; Query time:", result.Rtt)
+
+	return nil
 }

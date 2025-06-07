@@ -2,6 +2,7 @@ package beaconresolve
 
 import (
 	clog "github.com/coredns/coredns/plugin/pkg/log"
+
 	"github.com/davidseybold/beacondns/internal/recursive"
 
 	"github.com/coredns/coredns/plugin"
