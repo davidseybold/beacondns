@@ -4,13 +4,13 @@ services:
   resolver:
     build:
       context: ..
-      dockerfile: local/Dockerfile.resolver
+      dockerfile: cmd/resolver/Dockerfile
     ports:
       - "53:53/udp"
       - "53:53/tcp"
     environment:
       - BEACON_ETCD_ENDPOINTS=http://etcd:2379
-      - BEACON_RESOLVER_TYPE=recursive
+      - BEACON_RESOLVER_TYPE=unbound
       - BEACON_FORWARDER=1.1.1.1
     depends_on:
       - etcd
@@ -20,7 +20,7 @@ services:
   controller:
     build:
       context: ..
-      dockerfile: local/Dockerfile.controller
+      dockerfile: cmd/controller/Dockerfile
     ports:
       - "8080:8080"
     environment:

@@ -16,7 +16,7 @@ import (
 
 type config struct {
 	EtcdEndpoints []string      `env:"BEACON_ETCD_ENDPOINTS" envSeparator:","`
-	ResolverType  resolver.Type `env:"BEACON_RESOLVER_TYPE"                   envDefault:"forwarder"`
+	ResolverType  resolver.Type `env:"BEACON_RESOLVER_TYPE"                   envDefault:"forward"`
 	Forwarders    []string      `env:"BEACON_FORWARDER"      envSeparator:","`
 	DebugMode     bool          `env:"BEACON_DEBUG_MODE"                      envDefault:"false"`
 }

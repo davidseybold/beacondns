@@ -102,11 +102,12 @@ func (r *Resolver) Run(ctx context.Context) error {
 const corefile = `
 . {
     any
-    {{ if eq .Type "forwarder" }}
+    {{ if eq .Type "forward" }}
     forward . {{ join .Forwarders " " }}
-    {{ end }}
-    {{ if eq .Type "recursive" }}
+    {{ else if eq .Type "recursive" }}
     beaconresolve
+    {{ else if eq .Type "unbound" }}
+    forward . 127.0.0.1:5353
     {{ end }}
     errors
     log
